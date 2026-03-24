@@ -1,12 +1,15 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { SearchBar } from "./SearchBar";
 import { ClipList } from "./ClipList";
 import type { Clip } from "../types/clip";
 
 export function Panel() {
   const [clips, setClips] = useState<Clip[]>([]);
   const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     invoke<Clip[]>("get_clips")
@@ -29,6 +32,12 @@ export function Panel() {
     };
   }, []);
 
+  const filtered = useMemo(() => {
+    if (!query.trim()) return clips;
+    const lower = query.toLowerCase();
+    return clips.filter((c) => c.content.toLowerCase().includes(lower));
+  }, [clips, query]);
+
   const handleCopy = useCallback((id: number) => {
     invoke("copy_clip", { id }).catch((err: unknown) => {
       console.error("Failed to copy clip:", err);
@@ -42,23 +51,31 @@ export function Panel() {
     });
   }, []);
 
+  const handleEscape = useCallback(() => {
+    if (query) {
+      setQuery("");
+    } else {
+      getCurrentWindow().hide();
+    }
+  }, [query]);
+
   return (
     <div
-      className="flex flex-col w-screen h-screen"
-      style={{ backgroundColor: "#1a1a1a", color: "#ffffff" }}
+      className="flex flex-col w-screen h-screen overflow-hidden"
+      style={{
+        backgroundColor: "#1a1a1a",
+        color: "#ffffff",
+        borderRadius: "8px",
+      }}
     >
-      <div
-        className="flex items-center px-3 shrink-0 border-b"
-        style={{ height: "48px", borderColor: "#333333" }}
-      >
-        <span className="text-sm font-medium">SynaptClip</span>
-      </div>
+      <SearchBar value={query} onChange={setQuery} onEscape={handleEscape} />
 
       <ClipList
-        clips={clips}
+        clips={filtered}
         onCopy={handleCopy}
         onDelete={handleDelete}
         loading={loading}
+        emptyMessage={query ? "No matching clips" : "No clipboard history yet"}
       />
     </div>
   );

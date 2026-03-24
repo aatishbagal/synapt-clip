@@ -6,6 +6,7 @@ interface ClipListProps {
   onCopy: (id: number) => void;
   onDelete: (id: number) => void;
   loading: boolean;
+  emptyMessage?: string;
 }
 
 function SkeletonRow() {
@@ -17,7 +18,7 @@ function SkeletonRow() {
   );
 }
 
-export function ClipList({ clips, onCopy, onDelete, loading }: ClipListProps) {
+export function ClipList({ clips, onCopy, onDelete, loading, emptyMessage }: ClipListProps) {
   if (loading) {
     return (
       <div className="flex-1 overflow-y-auto">
@@ -32,7 +33,7 @@ export function ClipList({ clips, onCopy, onDelete, loading }: ClipListProps) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <p className="text-sm" style={{ color: "#888888" }}>
-          No clipboard history yet
+          {emptyMessage ?? "No clipboard history yet"}
         </p>
       </div>
     );

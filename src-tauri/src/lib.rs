@@ -44,15 +44,23 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .manage(AppState { db: db.clone() })
         .setup(move |app| {
+            let show = MenuItem::with_id(app, "show", "Show SynaptClip", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&quit])?;
+            let menu = Menu::with_items(app, &[&show, &quit])?;
 
             TrayIconBuilder::new()
                 .menu(&menu)
-                .on_menu_event(|app, event| {
-                    if event.id.as_ref() == "quit" {
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                    "quit" => {
                         app.exit(0);
                     }
+                    _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
                     if let TrayIconEvent::Click {
@@ -74,6 +82,15 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
+
+            if let Some(window) = app.get_webview_window("main") {
+                let w = window.clone();
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::Focused(false) = event {
+                        let _ = w.hide();
+                    }
+                });
+            }
 
             let backend = platform::detect_backend();
             tracing::info!("Detected clipboard backend: {:?}", backend);
