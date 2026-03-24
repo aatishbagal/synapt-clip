@@ -55,8 +55,8 @@ This forces the app into XWayland mode. The arboard backend works normally. No s
 | Version | Name | Key Deliverable | Demo-ready |
 |---|---|---|---|
 | v0.1 | Foundation | Clip capture and panel UI on X11 | No |
-| v0.2 | Search | DSA search layer, keyboard nav | No |
-| v0.3 | Wayland + Polish | Full platform support, settings, UI complete | Yes — professor demo |
+| v0.2 | Search | DSA search layer, Huffman compression, keyboard nav | No |
+| v0.3 | Wayland + Polish | Full platform support, persistent undo, Union-Find grouping, UI complete | Yes — professor demo |
 | v0.4 | Windows + Stability | Windows support, auto-start, reliability pass | No |
 | v0.5 | Synapt Bridge | Cross-device clipboard via Synapt | No |
 | v1.0 | Release | Installable, documented, stable | Yes — public release |
@@ -119,6 +119,14 @@ The Trie is rebuilt from the database on each app launch and updated incremental
 - Trie updated on every new clip captured, and on delete
 - Unit tests for Trie, Levenshtein, and ranking logic
 
+### Clip compression
+- Clip content longer than 512 bytes is compressed using Huffman encoding before storing in SQLite
+- Huffman tree is built from character frequencies of the clip content at insert time
+- Frequency table stored alongside compressed bytes to enable decompression on read
+- Clips too short to benefit from compression are stored raw with a flag
+- Panel clip card shows original size vs stored size as a muted stat line
+- DSA: Huffman Tree (Unit 1)
+
 ### Frontend
 - Search bar at top of panel, always visible
 - Real-time search as user types, debounced at 150ms
@@ -158,6 +166,19 @@ trait ClipboardWatcher: Send {
 - Right-click context menu on clip card: Copy, Pin/Unpin, Assign Category, Delete
 - Bulk select mode: hold Shift and click to select multiple clips, then delete or categorize
 - Clear history action in panel header: deletes all non-pinned clips with confirmation prompt
+
+### Clip undo via persistent data structures
+- Deleting a clip creates a new version of the clip list rather than mutating it, implemented as a persistent linked list
+- An "Undo" action in the panel header restores the last deleted clip by reverting to the previous version
+- Version chain is kept in memory for the current session only, not persisted to SQLite
+- DSA: Persistent Data Structures (Unit 6)
+
+### Smart clip grouping via Union-Find
+- Automatic clip grouping using Disjoint Set Union-Find with path compression and weighted union
+- Clips are unioned when they share the same source app or match a prefix pattern
+- User can view clips by group in a separate Groups tab in the panel
+- Union and find operations run at O(alpha(n)) amortized
+- DSA: Disjoint Set Union-Find (Unit 6)
 
 ### Settings page
 - History limit: number of clips to retain (50 / 100 / 500 / 1000 / unlimited)
