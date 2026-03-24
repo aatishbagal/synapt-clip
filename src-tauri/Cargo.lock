@@ -4101,6 +4101,7 @@ dependencies = [
  "arboard",
  "async-trait",
  "chrono",
+ "dirs",
  "serde",
  "serde_json",
  "sqlx",

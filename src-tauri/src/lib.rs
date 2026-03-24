@@ -3,12 +3,19 @@ mod commands;
 mod platform;
 mod storage;
 
+use std::sync::Arc;
+
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager,
+    Emitter, Manager,
 };
 use tracing_subscriber::EnvFilter;
+
+/// Shared application state accessible from Tauri commands.
+pub struct AppState {
+    pub db: Arc<storage::Db>,
+}
 
 /// Run the SynaptClip application.
 pub fn run() {
@@ -20,9 +27,23 @@ pub fn run() {
 
     tracing::info!("Starting SynaptClip v0.1.0");
 
+    let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
+
+    let db = rt.block_on(async {
+        let app_data_dir = dirs::data_dir()
+            .expect("failed to resolve app data directory")
+            .join("dev.synapt.clip");
+        storage::Db::new(&app_data_dir)
+            .await
+            .expect("failed to initialize database")
+    });
+
+    let db = Arc::new(db);
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .setup(|app| {
+        .manage(AppState { db: db.clone() })
+        .setup(move |app| {
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&quit])?;
 
@@ -54,9 +75,61 @@ pub fn run() {
                 })
                 .build(app)?;
 
+            let backend = platform::detect_backend();
+            tracing::info!("Detected clipboard backend: {:?}", backend);
+
+            let watcher = clipboard::create_watcher(&backend);
+            let (tx, mut rx) = tokio::sync::mpsc::channel::<clipboard::NewClip>(32);
+
+            let app_handle = app.handle().clone();
+            let db_writer = db.clone();
+
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = watcher.watch(tx).await {
+                    tracing::error!("Clipboard watcher error: {e}");
+                }
+            });
+
+            tauri::async_runtime::spawn(async move {
+                while let Some(new_clip) = rx.recv().await {
+                    match db_writer.get_last_clip_content().await {
+                        Ok(Some(ref last)) if last == &new_clip.content => continue,
+                        Err(e) => {
+                            tracing::warn!("Failed to check last clip: {e}");
+                        }
+                        _ => {}
+                    }
+
+                    match db_writer
+                        .insert_clip(
+                            &new_clip.content,
+                            &new_clip.content_type,
+                            new_clip.source_app.as_deref(),
+                        )
+                        .await
+                    {
+                        Ok(clip) => {
+                            if let Err(e) = app_handle.emit("clip:new", &clip) {
+                                tracing::warn!("Failed to emit clip:new event: {e}");
+                            }
+                            if let Err(e) = db_writer.enforce_history_limit(500).await {
+                                tracing::warn!("Failed to enforce history limit: {e}");
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to insert clip: {e}");
+                        }
+                    }
+                }
+            });
+
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![])
+        .invoke_handler(tauri::generate_handler![
+            commands::get_clips,
+            commands::copy_clip,
+            commands::delete_clip,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
