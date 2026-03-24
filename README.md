@@ -99,24 +99,24 @@ See `references/docs/` for the source of truth on architecture and development g
 
 ### Implemented
 
-| Concept | Syllabus Unit | Used For |
-|---|---|---|
-| Compressed Trie (Patricia Trie) | Unit 3 -- DS for Strings | Prefix search on clip content |
-| Suffix Array | Unit 3 -- DS for Strings | Substring search across all clip content |
-| Levenshtein Distance | Unit 3 -- Dictionaries Allowing Errors | Fuzzy search fallback |
-| Huffman Tree | Unit 1 -- Advanced Trees | Clip content compression before SQLite storage |
-| Double Ended Priority Queue | Unit 2 -- Priority Queues | Auto-expiry scheduler, oldest and newest clip access |
-| Bloom Filter (Bit Vector) | Unit 6 -- Succinct Representations | Fast duplicate detection before insert |
-| Persistent Linked List | Unit 6 -- Persistent Data Structures | Non-destructive clip delete with undo support |
-| Disjoint Set Union-Find | Unit 6 -- Miscellaneous | Automatic clip grouping by source or prefix pattern |
-| Concurrent Channels (mpsc) | Unit 6 -- Concurrent Data Structures | Thread-safe communication between watcher and storage tasks |
+| Feature | DSA Concept |
+|---|---|
+| Thread-safe communication between watcher and storage tasks | Concurrent Channels (mpsc) |
 
-### Planned (not yet implemented)
+### Planned
 
-| Concept | Syllabus Unit | Planned Use |
-|---|---|---|
-| Skip List | Unit 4 -- Randomized DS | Alternative sorted clip list with probabilistic balancing |
-| Treap | Unit 4 -- Randomized DS | Randomized BST for clip ranking by score and recency |
-| Splay Tree | Unit 1 -- Advanced Trees | Self-adjusting tree that moves recently accessed clips to root |
-| AVL or Red-Black Tree | Unit 1 -- Advanced Trees | Guaranteed O(log n) sorted retrieval by timestamp or score |
-| DAWG | Unit 3 -- DS for Strings | Compact index of all substrings for memory-efficient search |
+| Feature | DSA Concept |
+|---|---|
+| Prefix search on clip content | Compressed Trie (Patricia Trie) |
+| Substring search across all clip content | Suffix Array |
+| Fuzzy search fallback for typo tolerance | Levenshtein Distance |
+| Clip content compression before SQLite storage | Huffman Tree |
+| Auto-expiry scheduler, oldest and newest clip access | Double Ended Priority Queue |
+| Fast duplicate detection before insert | Bloom Filter (Bit Vector) |
+| Non-destructive clip delete with undo support | Persistent Linked List |
+| Automatic clip grouping by source or prefix pattern | Disjoint Set Union-Find |
+| Alternative sorted clip list with probabilistic balancing | Skip List |
+| Clip ranking by score and recency | Treap |
+| Self-adjusting tree that moves recently accessed clips to root | Splay Tree |
+| Guaranteed O(log n) sorted retrieval by timestamp or score | AVL or Red-Black Tree |
+| Compact index of all substrings for memory-efficient search | DAWG |
