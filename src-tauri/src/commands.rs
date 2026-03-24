@@ -44,3 +44,13 @@ pub async fn delete_clip(state: State<'_, AppState>, id: i64) -> Result<(), Stri
         .await
         .map_err(|e| e.to_string())
 }
+
+/// Soft-delete all non-pinned clips.
+#[tauri::command]
+pub async fn clear_all_clips(state: State<'_, AppState>) -> Result<(), String> {
+    state
+        .db
+        .clear_all_clips()
+        .await
+        .map_err(|e| e.to_string())
+}

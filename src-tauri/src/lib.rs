@@ -25,7 +25,7 @@ pub fn run() {
         )
         .init();
 
-    tracing::info!("Starting SynaptClip v0.1.0");
+    tracing::info!("Starting SynaptClip v0.2.0");
 
     let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
 
@@ -146,6 +146,7 @@ pub fn run() {
             commands::get_clips,
             commands::copy_clip,
             commands::delete_clip,
+            commands::clear_all_clips,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

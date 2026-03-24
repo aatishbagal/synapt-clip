@@ -127,6 +127,17 @@ impl Db {
         Ok(())
     }
 
+    /// Soft-delete all non-pinned clips.
+    pub async fn clear_all_clips(&self) -> Result<(), DbError> {
+        sqlx::query(
+            "UPDATE clips SET deleted_at = datetime('now') WHERE pinned = 0 AND deleted_at IS NULL",
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
     /// Get a single clip by ID.
     pub async fn get_clip_by_id(&self, id: i64) -> Result<Option<Clip>, DbError> {
         let clip = sqlx::query_as::<_, Clip>(
