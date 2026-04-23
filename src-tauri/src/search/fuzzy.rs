@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub fn levenshtein(a: &str, b: &str) -> usize {
     let a_chars: Vec<char> = a.trim().to_lowercase().chars().collect();
     let b_chars: Vec<char> = b.trim().to_lowercase().chars().collect();

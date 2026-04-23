@@ -1,10 +1,11 @@
-/// Runtime clipboard backend detection.
-///
-/// Determines which clipboard backend to use based on the current
-/// platform and session type. In v0.1, always returns Arboard.
-/// Wayland backends are added in v0.3.
+//! Runtime clipboard backend detection.
+//!
+//! Determines which clipboard backend to use based on the current
+//! platform and session type. In v0.1, always returns Arboard.
+//! Wayland backends are added in v0.3.
 
 /// Clipboard backend to use at runtime.
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClipboardBackend {
     /// X11, XWayland, and Windows — uses arboard crate for polling.

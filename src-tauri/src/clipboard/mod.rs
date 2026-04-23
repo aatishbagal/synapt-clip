@@ -2,6 +2,7 @@ mod arboard;
 mod watcher;
 
 pub use self::arboard::ArboardWatcher;
+#[allow(unused_imports)]
 pub use watcher::{ClipboardWatcher, NewClip, WatcherError};
 
 use crate::platform::ClipboardBackend;

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub struct BloomFilter {
     bits: Vec<u64>,
     num_bits: usize,

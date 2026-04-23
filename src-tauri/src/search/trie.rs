@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::collections::HashMap;
 
 const MAX_INDEX_LEN: usize = 200;
@@ -91,7 +93,7 @@ impl Trie {
                     new_child.children.insert(rem_first, Box::new(leaf));
                 }
 
-                *child = Box::new(new_child);
+                **child = new_child;
             }
         } else {
             let rem: String = key[depth..].iter().collect();

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::collections::HashMap;
 
 const MAX_INDEX_LEN: usize = 500;
