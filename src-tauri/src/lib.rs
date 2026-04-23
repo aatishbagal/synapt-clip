@@ -1,6 +1,7 @@
 mod clipboard;
 mod commands;
 mod platform;
+mod search;
 mod storage;
 
 use std::sync::Arc;
