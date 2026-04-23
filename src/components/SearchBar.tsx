@@ -1,25 +1,93 @@
-import { useRef, useEffect } from "react";
-import { Search } from "lucide-react";
+import { useRef, useEffect, useState, useCallback } from "react";
+import { Search, X, Loader2 } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
+import type { SearchResult } from "../types/search";
 
 interface SearchBarProps {
-  value: string;
-  onChange: (value: string) => void;
+  onResults: (results: SearchResult[], query: string) => void;
+  onClear: () => void;
   onEscape: () => void;
 }
 
-export function SearchBar({ value, onChange, onEscape }: SearchBarProps) {
+const DEBOUNCE_MS = 150;
+
+export function SearchBar({ onResults, onClear, onEscape }: SearchBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const timeoutRef = useRef<number | null>(null);
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") {
-      e.preventDefault();
-      onEscape();
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current !== null) {
+        window.clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
+  const runSearch = useCallback(
+    (value: string) => {
+      const trimmed = value.trim();
+      if (trimmed === "") {
+        onClear();
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      invoke<SearchResult[]>("search_clips", { query: trimmed })
+        .then((results) => {
+          onResults(results, trimmed);
+        })
+        .catch((err: unknown) => {
+          console.error("search_clips failed:", err);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    },
+    [onClear, onResults],
+  );
+
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const next = e.target.value;
+      setQuery(next);
+      if (timeoutRef.current !== null) {
+        window.clearTimeout(timeoutRef.current);
+      }
+      timeoutRef.current = window.setTimeout(() => {
+        runSearch(next);
+      }, DEBOUNCE_MS);
+    },
+    [runSearch],
+  );
+
+  const handleClear = useCallback(() => {
+    setQuery("");
+    if (timeoutRef.current !== null) {
+      window.clearTimeout(timeoutRef.current);
     }
-  };
+    onClear();
+    inputRef.current?.focus();
+  }, [onClear]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (query) {
+          handleClear();
+        } else {
+          onEscape();
+        }
+      }
+    },
+    [query, handleClear, onEscape],
+  );
 
   return (
     <div
@@ -34,12 +102,28 @@ export function SearchBar({ value, onChange, onEscape }: SearchBarProps) {
       <input
         ref={inputRef}
         type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
+        value={query}
+        onChange={handleChange}
         onKeyDown={handleKeyDown}
-        placeholder="Search clipboard history..."
+        placeholder="Search clips..."
         className="flex-1 bg-transparent text-sm text-white outline-none placeholder-[#666666]"
       />
+      {loading && (
+        <Loader2
+          size={14}
+          className="animate-spin shrink-0"
+          style={{ color: "#888888" }}
+        />
+      )}
+      {query && !loading && (
+        <button
+          onClick={handleClear}
+          title="Clear"
+          className="p-1 rounded hover:bg-[#333333] transition-colors"
+        >
+          <X size={14} style={{ color: "#888888" }} />
+        </button>
+      )}
     </div>
   );
 }

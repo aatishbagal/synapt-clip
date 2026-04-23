@@ -11,14 +11,20 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager,
 };
+use tokio::sync::Mutex;
 use tracing_subscriber::EnvFilter;
 
-/// Shared application state accessible from Tauri commands.
+use crate::search::depq::Depq;
+use crate::search::engine::SearchEngine;
+
+const HISTORY_LIMIT: usize = 500;
+
 pub struct AppState {
     pub db: Arc<storage::Db>,
+    pub search_engine: Arc<Mutex<SearchEngine>>,
+    pub expiry_depq: Arc<Mutex<Depq<(String, i64)>>>,
 }
 
-/// Run the SynaptClip application.
 pub fn run() {
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -30,20 +36,43 @@ pub fn run() {
 
     let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
 
-    let db = rt.block_on(async {
+    let (db, initial_clips) = rt.block_on(async {
         let app_data_dir = dirs::data_dir()
             .expect("failed to resolve app data directory")
             .join("dev.synapt.clip");
-        storage::Db::new(&app_data_dir)
+        let db = storage::Db::new(&app_data_dir)
             .await
-            .expect("failed to initialize database")
+            .expect("failed to initialize database");
+        let clips = db
+            .get_recent_clips(5000)
+            .await
+            .unwrap_or_else(|e| {
+                tracing::warn!("Failed to load initial clips: {e}");
+                Vec::new()
+            });
+        (db, clips)
     });
 
     let db = Arc::new(db);
 
+    let mut engine = SearchEngine::new();
+    let mut depq: Depq<(String, i64)> = Depq::new();
+    for c in &initial_clips {
+        engine.index_clip(c.id, &c.content);
+        if !c.pinned {
+            depq.push((c.created_at.clone(), c.id));
+        }
+    }
+    let search_engine = Arc::new(Mutex::new(engine));
+    let expiry_depq = Arc::new(Mutex::new(depq));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .manage(AppState { db: db.clone() })
+        .manage(AppState {
+            db: db.clone(),
+            search_engine: search_engine.clone(),
+            expiry_depq: expiry_depq.clone(),
+        })
         .setup(move |app| {
             let show = MenuItem::with_id(app, "show", "Show SynaptClip", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
@@ -101,6 +130,8 @@ pub fn run() {
 
             let app_handle = app.handle().clone();
             let db_writer = db.clone();
+            let engine_writer = search_engine.clone();
+            let depq_writer = expiry_depq.clone();
 
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = watcher.watch(tx).await {
@@ -110,12 +141,19 @@ pub fn run() {
 
             tauri::async_runtime::spawn(async move {
                 while let Some(new_clip) = rx.recv().await {
-                    match db_writer.get_last_clip_content().await {
-                        Ok(Some(ref last)) if last == &new_clip.content => continue,
-                        Err(e) => {
-                            tracing::warn!("Failed to check last clip: {e}");
+                    let is_probable_dup = engine_writer
+                        .lock()
+                        .await
+                        .is_probable_duplicate(&new_clip.content);
+
+                    if is_probable_dup {
+                        match db_writer.get_last_clip_content().await {
+                            Ok(Some(ref last)) if last == &new_clip.content => continue,
+                            Err(e) => {
+                                tracing::warn!("Failed to check last clip: {e}");
+                            }
+                            _ => {}
                         }
-                        _ => {}
                     }
 
                     match db_writer
@@ -127,11 +165,29 @@ pub fn run() {
                         .await
                     {
                         Ok(clip) => {
+                            engine_writer.lock().await.index_clip(clip.id, &clip.content);
+                            depq_writer
+                                .lock()
+                                .await
+                                .push((clip.created_at.clone(), clip.id));
+
                             if let Err(e) = app_handle.emit("clip:new", &clip) {
                                 tracing::warn!("Failed to emit clip:new event: {e}");
                             }
-                            if let Err(e) = db_writer.enforce_history_limit(500).await {
-                                tracing::warn!("Failed to enforce history limit: {e}");
+
+                            let mut depq_guard = depq_writer.lock().await;
+                            while depq_guard.len() > HISTORY_LIMIT {
+                                if let Some((_, evict_id)) = depq_guard.pop_min() {
+                                    drop(depq_guard);
+                                    if let Err(e) = db_writer.hard_delete_clip(evict_id).await {
+                                        tracing::warn!("Failed to evict clip {evict_id}: {e}");
+                                    } else {
+                                        engine_writer.lock().await.remove_clip(evict_id, "");
+                                    }
+                                    depq_guard = depq_writer.lock().await;
+                                } else {
+                                    break;
+                                }
                             }
                         }
                         Err(e) => {
@@ -148,6 +204,7 @@ pub fn run() {
             commands::copy_clip,
             commands::delete_clip,
             commands::clear_all_clips,
+            commands::search_clips,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -72,7 +72,9 @@ impl Trie {
                 let mut old_child = std::mem::replace(child, Box::new(TrieNode::new(String::new())));
                 old_child.edge_label = existing_suffix.clone();
 
-                let existing_first = existing_suffix.chars().next().unwrap();
+                let Some(existing_first) = existing_suffix.chars().next() else {
+                    return;
+                };
                 new_child.children.insert(existing_first, old_child);
 
                 if depth + i == key.len() {
@@ -80,7 +82,9 @@ impl Trie {
                     new_child.clip_ids.push(clip_id);
                 } else {
                     let rem: String = key[depth + i..].iter().collect();
-                    let rem_first = rem.chars().next().unwrap();
+                    let Some(rem_first) = rem.chars().next() else {
+                        return;
+                    };
                     let mut leaf = TrieNode::new(rem);
                     leaf.is_terminal = true;
                     leaf.clip_ids.push(clip_id);

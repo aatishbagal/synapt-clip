@@ -91,7 +91,7 @@ pub fn build_tree(text: &str) -> Option<HuffmanNode> {
     }
 
     if heap.len() == 1 {
-        let Reverse(only) = heap.pop().unwrap();
+        let Reverse(only) = heap.pop()?;
         let total = only.freq;
         return Some(HuffmanNode::Internal {
             freq: total,
@@ -101,8 +101,8 @@ pub fn build_tree(text: &str) -> Option<HuffmanNode> {
     }
 
     while heap.len() > 1 {
-        let Reverse(a) = heap.pop().unwrap();
-        let Reverse(b) = heap.pop().unwrap();
+        let Reverse(a) = heap.pop()?;
+        let Reverse(b) = heap.pop()?;
         let merged_freq = a.freq + b.freq;
         let merged = HuffmanNode::Internal {
             freq: merged_freq,
