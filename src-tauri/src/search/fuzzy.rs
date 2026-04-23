@@ -1,10 +1,3 @@
-//! Levenshtein edit distance and a fuzzy searcher over clip contents.
-//!
-//! Maps to the "dictionaries allowing errors" topic in Unit 3. Uses the
-//! classic DP recurrence with the two-row space optimisation.
-
-/// Edit distance between `a` and `b`, char-aware (safe for Unicode).
-/// O(m * n) time, O(min(m, n)) space via two rolling rows.
 pub fn levenshtein(a: &str, b: &str) -> usize {
     let a_chars: Vec<char> = a.trim().to_lowercase().chars().collect();
     let b_chars: Vec<char> = b.trim().to_lowercase().chars().collect();
@@ -39,8 +32,6 @@ pub fn levenshtein(a: &str, b: &str) -> usize {
     prev[m]
 }
 
-/// Return true when edit distance between `a` and `b` is at most `threshold`.
-/// Early-exits when the length difference alone exceeds the threshold.
 pub fn within_distance(a: &str, b: &str, threshold: usize) -> bool {
     let a_len = a.trim().chars().count();
     let b_len = b.trim().chars().count();
@@ -51,20 +42,15 @@ pub fn within_distance(a: &str, b: &str, threshold: usize) -> bool {
     levenshtein(a, b) <= threshold
 }
 
-/// Fuzzy searcher that matches a query against individual words inside
-/// each clip's content.
 pub struct FuzzySearcher {
     threshold: usize,
 }
 
 impl FuzzySearcher {
-    /// Create a searcher with the given max edit distance. Typical default: 2.
     pub fn new(threshold: usize) -> Self {
         Self { threshold }
     }
 
-    /// Search `clips` for matches within the configured edit distance.
-    /// Returns `(clip_id, min_distance)` sorted ascending.
     pub fn search(&self, query: &str, clips: &[(i64, String)]) -> Vec<(i64, usize)> {
         let q = query.trim().to_lowercase();
         if q.is_empty() {
@@ -166,9 +152,9 @@ mod tests {
     fn fuzzy_results_sorted_ascending() {
         let searcher = FuzzySearcher::new(3);
         let clips = vec![
-            (1, "abcd".to_string()),  // distance 1 from "abc"
-            (2, "abc".to_string()),   // distance 0
-            (3, "axcd".to_string()),  // distance 2
+            (1, "abcd".to_string()),
+            (2, "abc".to_string()),
+            (3, "axcd".to_string()),
         ];
         let results = searcher.search("abc", &clips);
         let distances: Vec<usize> = results.iter().map(|(_, d)| *d).collect();
@@ -180,7 +166,6 @@ mod tests {
 
     #[test]
     fn unicode_distance() {
-        // Substituting a multi-byte char should count as exactly one edit.
         assert_eq!(levenshtein("café", "cafe"), 1);
         assert_eq!(levenshtein("日本語", "日本"), 1);
     }

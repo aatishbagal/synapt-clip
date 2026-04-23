@@ -1,13 +1,5 @@
-//! Compressed Trie (Patricia Trie) for prefix search on clip content.
-//!
-//! Each edge carries a string label rather than a single character, so
-//! chains of single-child nodes are collapsed into one edge. This keeps
-//! memory low for the long strings that frequently land on the clipboard.
-
 use std::collections::HashMap;
 
-/// Maximum content length indexed per clip. Longer clips are truncated
-/// at the char boundary so a single large clip cannot dominate the Trie.
 const MAX_INDEX_LEN: usize = 200;
 
 struct TrieNode {
@@ -28,14 +20,12 @@ impl TrieNode {
     }
 }
 
-/// A compressed Trie mapping normalized content strings to clip ids.
 pub struct Trie {
     root: TrieNode,
     size: usize,
 }
 
 impl Trie {
-    /// Create an empty Trie.
     pub fn new() -> Self {
         Self {
             root: TrieNode::new(String::new()),
@@ -43,8 +33,6 @@ impl Trie {
         }
     }
 
-    /// Insert a clip's content. Content is lowercased and trimmed; content
-    /// longer than 200 chars is truncated at the char boundary.
     pub fn insert(&mut self, content: &str, clip_id: i64) {
         let key = normalize(content);
         if key.is_empty() {
@@ -110,7 +98,6 @@ impl Trie {
         }
     }
 
-    /// Return all clip ids whose indexed content starts with `prefix`.
     pub fn prefix_search(&self, prefix: &str) -> Vec<i64> {
         let key = normalize(prefix);
         if key.is_empty() {
@@ -137,7 +124,6 @@ impl Trie {
             }
 
             if remaining.len() < label_chars.len() {
-                // Prefix ends inside this edge — every id in subtree matches.
                 return collect_ids(child);
             }
 
@@ -148,17 +134,14 @@ impl Trie {
         collect_ids(node)
     }
 
-    /// Remove a clip id from the Trie. Nodes holding other ids are kept.
     pub fn remove(&mut self, clip_id: i64) {
         remove_id(&mut self.root, clip_id);
     }
 
-    /// Number of distinct insertions performed.
     pub fn size(&self) -> usize {
         self.size
     }
 
-    /// Remove everything.
     pub fn clear(&mut self) {
         self.root = TrieNode::new(String::new());
         self.size = 0;
@@ -256,11 +239,8 @@ mod tests {
         t.insert("abc", 1);
         t.insert("abcdef", 2);
 
-        // Walking from root by first char 'a' should land on an edge starting with 'a'.
         let first = t.root.children.get(&'a').expect("root has 'a' edge");
-        // The edge label covers the shared 'abc' prefix (length 3).
         assert_eq!(first.edge_label, "abc");
-        // And it has a child for the 'def' suffix of the longer string.
         assert!(first.children.contains_key(&'d'));
     }
 

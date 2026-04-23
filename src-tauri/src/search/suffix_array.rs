@@ -1,26 +1,14 @@
-//! Suffix Array for substring search.
-//!
-//! A sorted array of suffix start positions. Binary search over it finds
-//! any substring in O(m log n). Built per-clip and aggregated in
-//! [`SuffixIndex`].
-
 use std::collections::HashMap;
 
-/// Cap per-clip indexed length to bound memory.
 const MAX_INDEX_LEN: usize = 500;
 
-/// Suffix array for a single clip's content.
 pub struct SuffixArray {
     text: String,
-    /// Sorted suffix start indices, expressed as char offsets (not byte offsets).
     suffixes: Vec<usize>,
-    /// Char-decoded text for O(1) random access during search.
     chars: Vec<char>,
 }
 
 impl SuffixArray {
-    /// Build a suffix array for `text`. Text is lowercased before indexing.
-    /// O(n^2 log n) worst case via naive sort — fine for n <= 500.
     pub fn build(text: &str) -> Self {
         let normalized = text.to_lowercase();
         let chars: Vec<char> = normalized.chars().collect();
@@ -33,7 +21,6 @@ impl SuffixArray {
         }
     }
 
-    /// Return true if `pattern` occurs anywhere in the indexed text.
     pub fn contains(&self, pattern: &str) -> bool {
         let pat: Vec<char> = pattern.to_lowercase().chars().collect();
         if pat.is_empty() {
@@ -59,7 +46,6 @@ impl SuffixArray {
         false
     }
 
-    /// Return all char positions where `pattern` occurs in the text.
     pub fn find_all(&self, pattern: &str) -> Vec<usize> {
         let pat: Vec<char> = pattern.to_lowercase().chars().collect();
         let mut out = Vec::new();
@@ -67,7 +53,6 @@ impl SuffixArray {
             return out;
         }
 
-        // Find any matching suffix first.
         let mut lo = 0usize;
         let mut hi = self.suffixes.len();
         let mut found: Option<usize> = None;
@@ -90,7 +75,6 @@ impl SuffixArray {
             return out;
         };
 
-        // Expand left and right from the found index to gather all matches.
         let matches_at = |i: usize| -> bool {
             let s = self.suffixes[i];
             let end = (s + pat.len()).min(self.chars.len());
@@ -118,38 +102,31 @@ impl SuffixArray {
         out
     }
 
-    /// The indexed (normalized) text.
     pub fn text(&self) -> &str {
         &self.text
     }
 }
 
-/// Aggregate suffix arrays across all clips.
 pub struct SuffixIndex {
     entries: HashMap<i64, SuffixArray>,
 }
 
 impl SuffixIndex {
-    /// Create an empty index.
     pub fn new() -> Self {
         Self {
             entries: HashMap::new(),
         }
     }
 
-    /// Add or replace the suffix array for `clip_id`. Content longer than
-    /// 500 chars is truncated at the char boundary.
     pub fn index_clip(&mut self, clip_id: i64, content: &str) {
         let truncated: String = content.chars().take(MAX_INDEX_LEN).collect();
         self.entries.insert(clip_id, SuffixArray::build(&truncated));
     }
 
-    /// Drop the suffix array for `clip_id`.
     pub fn remove_clip(&mut self, clip_id: i64) {
         self.entries.remove(&clip_id);
     }
 
-    /// Return all clip ids whose content contains `pattern` as a substring.
     pub fn search(&self, pattern: &str) -> Vec<i64> {
         let mut out = Vec::new();
         for (id, sa) in &self.entries {
@@ -160,8 +137,6 @@ impl SuffixIndex {
         out
     }
 
-    /// Look up the suffix array for a specific clip, for callers that
-    /// need to compute match positions.
     pub fn get(&self, clip_id: i64) -> Option<&SuffixArray> {
         self.entries.get(&clip_id)
     }
@@ -234,7 +209,6 @@ mod tests {
         let mut idx = SuffixIndex::new();
         let long: String = "a".repeat(600) + "UNIQUE";
         idx.index_clip(1, &long);
-        // UNIQUE lives past the 500-char boundary and should not be indexed.
         assert!(idx.search("unique").is_empty());
     }
 
