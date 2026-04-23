@@ -20,6 +20,13 @@ pub enum WatcherError {
     /// The watcher was stopped (receiver dropped).
     #[error("watcher stopped")]
     WatcherStopped,
+    /// A required binary, extension, or file was not found. The message is
+    /// surfaced to the frontend as a setup prompt.
+    #[error("setup required: {0}")]
+    NotFound(String),
+    /// An I/O error occurred while watching the clipboard source.
+    #[error("io error: {0}")]
+    Io(String),
 }
 
 /// Trait implemented by all clipboard backends.

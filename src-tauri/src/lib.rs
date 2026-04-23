@@ -159,9 +159,20 @@ pub fn run() {
             let history_writer = clip_history.clone();
             let group_writer = group_manager.clone();
 
+            let setup_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = watcher.watch(tx).await {
-                    tracing::error!("Clipboard watcher error: {e}");
+                match watcher.watch(tx).await {
+                    Ok(()) => {}
+                    Err(clipboard::WatcherError::NotFound(msg)) => {
+                        tracing::warn!("Clipboard watcher setup required: {msg}");
+                        let _ = setup_handle.emit(
+                            "watcher:setup_required",
+                            serde_json::json!({ "message": msg }),
+                        );
+                    }
+                    Err(e) => {
+                        tracing::error!("Clipboard watcher error: {e}");
+                    }
                 }
             });
 
