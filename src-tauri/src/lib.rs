@@ -266,6 +266,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_clips,
+            commands::get_pinned_clips,
             commands::copy_clip,
             commands::delete_clip,
             commands::clear_all_clips,
@@ -273,6 +274,12 @@ pub fn run() {
             commands::undo_delete,
             commands::get_clip_groups,
             commands::get_group_for_clip,
+            commands::toggle_pin,
+            commands::assign_category,
+            commands::get_categories,
+            commands::delete_category,
+            commands::bulk_delete,
+            commands::clear_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

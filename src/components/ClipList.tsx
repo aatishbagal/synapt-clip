@@ -7,6 +7,10 @@ interface ClipListProps {
   onDelete: (id: number) => void;
   loading: boolean;
   emptyMessage?: string;
+  bulkMode?: boolean;
+  selectedIds?: Set<number>;
+  onToggleSelect?: (id: number) => void;
+  onRightClick?: (clip: Clip, e: React.MouseEvent) => void;
 }
 
 function SkeletonRow() {
@@ -18,7 +22,17 @@ function SkeletonRow() {
   );
 }
 
-export function ClipList({ clips, onCopy, onDelete, loading, emptyMessage }: ClipListProps) {
+export function ClipList({
+  clips,
+  onCopy,
+  onDelete,
+  loading,
+  emptyMessage,
+  bulkMode,
+  selectedIds,
+  onToggleSelect,
+  onRightClick,
+}: ClipListProps) {
   if (loading) {
     return (
       <div className="flex-1 overflow-y-auto">
@@ -47,6 +61,10 @@ export function ClipList({ clips, onCopy, onDelete, loading, emptyMessage }: Cli
           clip={clip}
           onCopy={onCopy}
           onDelete={onDelete}
+          bulkMode={bulkMode}
+          isSelected={selectedIds?.has(clip.id) ?? false}
+          onToggleSelect={onToggleSelect}
+          onRightClick={onRightClick ? (e) => onRightClick(clip, e) : undefined}
         />
       ))}
     </div>

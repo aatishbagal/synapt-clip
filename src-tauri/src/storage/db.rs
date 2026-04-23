@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+use std::path::Path;
+
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
-use std::path::Path;
 
 use crate::search::huffman::{self, HuffmanError};
 
@@ -28,6 +30,7 @@ pub struct Clip {
     pub was_compressed: bool,
     pub original_size: i64,
     pub compressed_size: i64,
+    pub category: Option<String>,
 }
 
 #[derive(Debug, Clone, sqlx::FromRow)]
@@ -42,7 +45,11 @@ struct ClipRow {
     was_compressed: bool,
     original_size: i64,
     compressed_size: i64,
+    category: Option<String>,
 }
+
+const CLIP_COLUMNS: &str = "id, content, content_type, created_at, source_app, pinned, \
+    deleted_at, was_compressed, original_size, compressed_size, category";
 
 impl ClipRow {
     fn decode(self) -> Result<Clip, DbError> {
@@ -58,6 +65,7 @@ impl ClipRow {
             was_compressed: self.was_compressed,
             original_size: self.original_size,
             compressed_size: self.compressed_size,
+            category: self.category,
         })
     }
 }
@@ -92,20 +100,20 @@ impl Db {
         let payload_text = String::from_utf8(payload)
             .map_err(|e| DbError::Huffman(HuffmanError::Malformed(format!("utf-8: {e}"))))?;
 
-        let row = sqlx::query_as::<_, ClipRow>(
+        let sql = format!(
             "INSERT INTO clips (content, content_type, source_app, was_compressed, original_size, compressed_size) \
              VALUES (?, ?, ?, ?, ?, ?) \
-             RETURNING id, content, content_type, created_at, source_app, pinned, deleted_at, \
-                       was_compressed, original_size, compressed_size",
-        )
-        .bind(&payload_text)
-        .bind(content_type)
-        .bind(source_app)
-        .bind(was_compressed)
-        .bind(original_size)
-        .bind(compressed_size)
-        .fetch_one(&self.pool)
-        .await?;
+             RETURNING {CLIP_COLUMNS}"
+        );
+        let row = sqlx::query_as::<_, ClipRow>(&sql)
+            .bind(&payload_text)
+            .bind(content_type)
+            .bind(source_app)
+            .bind(was_compressed)
+            .bind(original_size)
+            .bind(compressed_size)
+            .fetch_one(&self.pool)
+            .await?;
 
         Ok(Clip {
             id: row.id,
@@ -118,18 +126,19 @@ impl Db {
             was_compressed: row.was_compressed,
             original_size: row.original_size,
             compressed_size: row.compressed_size,
+            category: row.category,
         })
     }
 
     pub async fn get_recent_clips(&self, limit: i64) -> Result<Vec<Clip>, DbError> {
-        let rows = sqlx::query_as::<_, ClipRow>(
-            "SELECT id, content, content_type, created_at, source_app, pinned, deleted_at, \
-                    was_compressed, original_size, compressed_size \
-             FROM clips WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT ?",
-        )
-        .bind(limit)
-        .fetch_all(&self.pool)
-        .await?;
+        let sql = format!(
+            "SELECT {CLIP_COLUMNS} FROM clips WHERE deleted_at IS NULL \
+             ORDER BY created_at DESC LIMIT ?"
+        );
+        let rows = sqlx::query_as::<_, ClipRow>(&sql)
+            .bind(limit)
+            .fetch_all(&self.pool)
+            .await?;
 
         rows.into_iter().map(|r| r.decode()).collect()
     }
@@ -204,14 +213,11 @@ impl Db {
     }
 
     pub async fn get_clip_by_id(&self, id: i64) -> Result<Option<Clip>, DbError> {
-        let row = sqlx::query_as::<_, ClipRow>(
-            "SELECT id, content, content_type, created_at, source_app, pinned, deleted_at, \
-                    was_compressed, original_size, compressed_size \
-             FROM clips WHERE id = ?",
-        )
-        .bind(id)
-        .fetch_optional(&self.pool)
-        .await?;
+        let sql = format!("SELECT {CLIP_COLUMNS} FROM clips WHERE id = ?");
+        let row = sqlx::query_as::<_, ClipRow>(&sql)
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
 
         match row {
             Some(r) => Ok(Some(r.decode()?)),
@@ -225,5 +231,124 @@ impl Db {
             .fetch_optional(&self.pool)
             .await?;
         Ok(row.map(|r| r.0).unwrap_or(false))
+    }
+
+    /// Flip the `pinned` flag on a clip. Returns the new pinned state.
+    pub async fn toggle_pin(&self, clip_id: i64) -> Result<bool, DbError> {
+        sqlx::query("UPDATE clips SET pinned = 1 - pinned WHERE id = ?")
+            .bind(clip_id)
+            .execute(&self.pool)
+            .await?;
+        self.is_pinned(clip_id).await
+    }
+
+    /// Assign a category to a clip. Creates the category row if missing.
+    /// Passing `None` clears the assignment.
+    pub async fn assign_category(
+        &self,
+        clip_id: i64,
+        category: Option<&str>,
+    ) -> Result<(), DbError> {
+        if let Some(name) = category {
+            sqlx::query("INSERT OR IGNORE INTO categories (name) VALUES (?)")
+                .bind(name)
+                .execute(&self.pool)
+                .await?;
+        }
+        sqlx::query("UPDATE clips SET category = ? WHERE id = ?")
+            .bind(category)
+            .bind(clip_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    /// Return all category names sorted alphabetically.
+    pub async fn get_categories(&self) -> Result<Vec<String>, DbError> {
+        let rows: Vec<(String,)> =
+            sqlx::query_as("SELECT name FROM categories ORDER BY name ASC")
+                .fetch_all(&self.pool)
+                .await?;
+        Ok(rows.into_iter().map(|r| r.0).collect())
+    }
+
+    /// Delete a category and unset it on any clips that referenced it.
+    pub async fn delete_category(&self, name: &str) -> Result<(), DbError> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("UPDATE clips SET category = NULL WHERE category = ?")
+            .bind(name)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM categories WHERE name = ?")
+            .bind(name)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// Soft-delete a batch of clips atomically.
+    pub async fn bulk_delete(&self, clip_ids: Vec<i64>) -> Result<(), DbError> {
+        if clip_ids.is_empty() {
+            return Ok(());
+        }
+        let mut tx = self.pool.begin().await?;
+        for id in clip_ids {
+            sqlx::query("UPDATE clips SET deleted_at = datetime('now') WHERE id = ?")
+                .bind(id)
+                .execute(&mut *tx)
+                .await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// Soft-delete every non-pinned, non-deleted clip. Returns the row count.
+    pub async fn clear_history(&self) -> Result<u64, DbError> {
+        let result = sqlx::query(
+            "UPDATE clips SET deleted_at = datetime('now') \
+             WHERE pinned = 0 AND deleted_at IS NULL",
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected())
+    }
+
+    /// Return all non-deleted clips in the given category, newest first.
+    pub async fn get_clips_by_category(&self, category: &str) -> Result<Vec<Clip>, DbError> {
+        let sql = format!(
+            "SELECT {CLIP_COLUMNS} FROM clips \
+             WHERE category = ? AND deleted_at IS NULL \
+             ORDER BY created_at DESC"
+        );
+        let rows = sqlx::query_as::<_, ClipRow>(&sql)
+            .bind(category)
+            .fetch_all(&self.pool)
+            .await?;
+        rows.into_iter().map(|r| r.decode()).collect()
+    }
+
+    /// Return all non-deleted clips that are currently pinned, newest first.
+    pub async fn get_pinned_clips(&self) -> Result<Vec<Clip>, DbError> {
+        let sql = format!(
+            "SELECT {CLIP_COLUMNS} FROM clips \
+             WHERE pinned = 1 AND deleted_at IS NULL \
+             ORDER BY created_at DESC"
+        );
+        let rows = sqlx::query_as::<_, ClipRow>(&sql)
+            .fetch_all(&self.pool)
+            .await?;
+        rows.into_iter().map(|r| r.decode()).collect()
+    }
+
+    /// Return all category names as a map mirroring the categories table.
+    /// Used by settings and other features that expect a HashMap view.
+    #[allow(dead_code)]
+    pub async fn categories_map(&self) -> Result<HashMap<String, i64>, DbError> {
+        let rows: Vec<(i64, String)> =
+            sqlx::query_as("SELECT id, name FROM categories")
+                .fetch_all(&self.pool)
+                .await?;
+        Ok(rows.into_iter().map(|(id, name)| (name, id)).collect())
     }
 }

@@ -225,6 +225,7 @@ mod tests {
             was_compressed: false,
             original_size: content.len() as i64,
             compressed_size: content.len() as i64,
+            category: None,
         }
     }
 

@@ -1,14 +1,42 @@
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
+use crate::dsa::PersistentList;
 use crate::storage::Clip;
 use crate::AppState;
 
 #[tauri::command]
-pub async fn get_clips(state: State<'_, AppState>) -> Result<Vec<Clip>, String> {
+pub async fn get_clips(
+    state: State<'_, AppState>,
+    category: Option<String>,
+    limit: Option<i64>,
+) -> Result<Vec<Clip>, String> {
+    let cap = limit.unwrap_or(500);
+    match category.as_deref() {
+        Some(c) if !c.is_empty() => state
+            .db
+            .get_clips_by_category(c)
+            .await
+            .map(|mut v| {
+                if (v.len() as i64) > cap {
+                    v.truncate(cap as usize);
+                }
+                v
+            })
+            .map_err(|e| e.to_string()),
+        _ => state
+            .db
+            .get_recent_clips(cap)
+            .await
+            .map_err(|e| e.to_string()),
+    }
+}
+
+#[tauri::command]
+pub async fn get_pinned_clips(state: State<'_, AppState>) -> Result<Vec<Clip>, String> {
     state
         .db
-        .get_recent_clips(500)
+        .get_pinned_clips()
         .await
         .map_err(|e| e.to_string())
 }
@@ -162,4 +190,117 @@ pub async fn search_clips(
             match_positions: r.match_positions,
         })
         .collect())
+}
+
+#[tauri::command]
+pub async fn toggle_pin(state: State<'_, AppState>, clip_id: i64) -> Result<bool, String> {
+    state
+        .db
+        .toggle_pin(clip_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn assign_category(
+    state: State<'_, AppState>,
+    clip_id: i64,
+    category: Option<String>,
+) -> Result<(), String> {
+    state
+        .db
+        .assign_category(clip_id, category.as_deref())
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_categories(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    state
+        .db
+        .get_categories()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn delete_category(state: State<'_, AppState>, name: String) -> Result<(), String> {
+    state
+        .db
+        .delete_category(&name)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn bulk_delete(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    clip_ids: Vec<i64>,
+) -> Result<(), String> {
+    state
+        .db
+        .bulk_delete(clip_ids.clone())
+        .await
+        .map_err(|e| e.to_string())?;
+
+    {
+        let mut engine = state.search_engine.lock().await;
+        for id in &clip_ids {
+            engine.remove_clip(*id, "");
+        }
+    }
+
+    {
+        let mut history = state.clip_history.lock().await;
+        for id in &clip_ids {
+            if let Some(idx) = history.current().iter().position(|c| c.id == *id) {
+                let v = history.current().remove_at(idx);
+                history.push(v);
+            }
+        }
+    }
+
+    for id in &clip_ids {
+        let _ = app.emit("clip:deleted", id);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn clear_history(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<u64, String> {
+    let count = state
+        .db
+        .clear_history()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let remaining = state
+        .db
+        .get_recent_clips(5000)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    {
+        let mut engine = state.search_engine.lock().await;
+        *engine = crate::search::engine::SearchEngine::new();
+        for c in &remaining {
+            engine.index_clip(c.id, &c.content);
+        }
+    }
+
+    {
+        let mut history = state.clip_history.lock().await;
+        let mut rebuilt: PersistentList<Clip> = PersistentList::new();
+        for c in remaining.iter().rev() {
+            rebuilt = rebuilt.prepend(c.clone());
+        }
+        history.push(rebuilt);
+    }
+
+    let _ = app.emit("history:cleared", count);
+    Ok(count)
 }

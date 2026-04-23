@@ -1,0 +1,8 @@
+ALTER TABLE clips ADD COLUMN category TEXT;
+
+CREATE TABLE IF NOT EXISTS categories (
+    id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE
+);
+
+CREATE INDEX IF NOT EXISTS idx_clips_category ON clips(category);

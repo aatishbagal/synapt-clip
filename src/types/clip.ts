@@ -9,4 +9,5 @@ export interface Clip {
   was_compressed: boolean;
   original_size: number;
   compressed_size: number;
+  category: string | null;
 }
