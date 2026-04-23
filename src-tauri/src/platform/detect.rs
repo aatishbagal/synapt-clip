@@ -19,14 +19,28 @@ pub fn detect_backend() -> ClipboardBackend {
 
     #[cfg(target_os = "linux")]
     {
+        if std::env::var("GDK_BACKEND").as_deref() == Ok("x11") {
+            tracing::info!("GDK_BACKEND=x11 set — using Arboard via XWayland");
+            return ClipboardBackend::Arboard;
+        }
+
         let session = std::env::var("XDG_SESSION_TYPE").unwrap_or_default();
         if session != "wayland" || std::env::var("WAYLAND_DISPLAY").is_err() {
             return ClipboardBackend::Arboard;
         }
 
+        let desktop = std::env::var("XDG_CURRENT_DESKTOP")
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if desktop.contains("gnome") || desktop.contains("unity") {
+            tracing::info!("GNOME Wayland detected — wlr-data-control unsupported, using GCH");
+            return ClipboardBackend::GchFile;
+        }
+
         if probe_wlr_data_control() {
             ClipboardBackend::WlrDataControl
         } else {
+            tracing::info!("wlr-data-control probe failed — falling back to GCH file watcher");
             ClipboardBackend::GchFile
         }
     }
