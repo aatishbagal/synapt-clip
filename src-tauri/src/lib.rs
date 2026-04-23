@@ -1,5 +1,6 @@
 mod clipboard;
 mod commands;
+mod dsa;
 mod platform;
 mod search;
 mod storage;
@@ -14,8 +15,10 @@ use tauri::{
 use tokio::sync::Mutex;
 use tracing_subscriber::EnvFilter;
 
+use crate::dsa::{should_group, ClipGroupManager, PersistentList, VersionHistory};
 use crate::search::depq::Depq;
 use crate::search::engine::SearchEngine;
+use crate::storage::Clip;
 
 const HISTORY_LIMIT: usize = 500;
 
@@ -23,6 +26,8 @@ pub struct AppState {
     pub db: Arc<storage::Db>,
     pub search_engine: Arc<Mutex<SearchEngine>>,
     pub expiry_depq: Arc<Mutex<Depq<(String, i64)>>>,
+    pub clip_history: Arc<Mutex<VersionHistory<Clip>>>,
+    pub group_manager: Arc<Mutex<ClipGroupManager>>,
 }
 
 pub fn run() {
@@ -57,14 +62,31 @@ pub fn run() {
 
     let mut engine = SearchEngine::new();
     let mut depq: Depq<(String, i64)> = Depq::new();
+    let mut group_manager = ClipGroupManager::new();
     for c in &initial_clips {
         engine.index_clip(c.id, &c.content);
         if !c.pinned {
             depq.push((c.created_at.clone(), c.id));
         }
+        group_manager.add_clip(c.id);
     }
+    for i in 0..initial_clips.len() {
+        for j in (i + 1)..initial_clips.len() {
+            if should_group(&initial_clips[i], &initial_clips[j]) {
+                group_manager.group_clips(initial_clips[i].id, initial_clips[j].id);
+            }
+        }
+    }
+
+    let mut initial_version: PersistentList<Clip> = PersistentList::new();
+    for c in initial_clips.iter().rev() {
+        initial_version = initial_version.prepend(c.clone());
+    }
+
     let search_engine = Arc::new(Mutex::new(engine));
     let expiry_depq = Arc::new(Mutex::new(depq));
+    let clip_history = Arc::new(Mutex::new(VersionHistory::new(initial_version)));
+    let group_manager = Arc::new(Mutex::new(group_manager));
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -72,6 +94,8 @@ pub fn run() {
             db: db.clone(),
             search_engine: search_engine.clone(),
             expiry_depq: expiry_depq.clone(),
+            clip_history: clip_history.clone(),
+            group_manager: group_manager.clone(),
         })
         .setup(move |app| {
             let show = MenuItem::with_id(app, "show", "Show SynaptClip", true, None::<&str>)?;
@@ -132,6 +156,8 @@ pub fn run() {
             let db_writer = db.clone();
             let engine_writer = search_engine.clone();
             let depq_writer = expiry_depq.clone();
+            let history_writer = clip_history.clone();
+            let group_writer = group_manager.clone();
 
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = watcher.watch(tx).await {
@@ -171,6 +197,33 @@ pub fn run() {
                                 .await
                                 .push((clip.created_at.clone(), clip.id));
 
+                            {
+                                let mut history = history_writer.lock().await;
+                                let new_version = history.current().prepend(clip.clone());
+                                history.push(new_version);
+                            }
+
+                            let recent = match db_writer.get_recent_clips(21).await {
+                                Ok(r) => r,
+                                Err(e) => {
+                                    tracing::warn!("Failed to fetch recent for grouping: {e}");
+                                    Vec::new()
+                                }
+                            };
+                            {
+                                let mut mgr = group_writer.lock().await;
+                                mgr.add_clip(clip.id);
+                                for other in recent.iter() {
+                                    if other.id == clip.id {
+                                        continue;
+                                    }
+                                    if should_group(&clip, other) {
+                                        mgr.add_clip(other.id);
+                                        mgr.group_clips(clip.id, other.id);
+                                    }
+                                }
+                            }
+
                             if let Err(e) = app_handle.emit("clip:new", &clip) {
                                 tracing::warn!("Failed to emit clip:new event: {e}");
                             }
@@ -183,6 +236,7 @@ pub fn run() {
                                         tracing::warn!("Failed to evict clip {evict_id}: {e}");
                                     } else {
                                         engine_writer.lock().await.remove_clip(evict_id, "");
+                                        group_writer.lock().await.remove_clip(evict_id);
                                     }
                                     depq_guard = depq_writer.lock().await;
                                 } else {
@@ -205,6 +259,9 @@ pub fn run() {
             commands::delete_clip,
             commands::clear_all_clips,
             commands::search_clips,
+            commands::undo_delete,
+            commands::get_clip_groups,
+            commands::get_group_for_clip,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

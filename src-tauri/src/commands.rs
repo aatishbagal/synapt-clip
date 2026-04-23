@@ -1,5 +1,5 @@
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 
 use crate::storage::Clip;
 use crate::AppState;
@@ -35,14 +35,80 @@ pub async fn copy_clip(state: State<'_, AppState>, id: i64) -> Result<(), String
 }
 
 #[tauri::command]
-pub async fn delete_clip(state: State<'_, AppState>, id: i64) -> Result<(), String> {
+pub async fn delete_clip(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: i64,
+) -> Result<(), String> {
     state
         .db
         .soft_delete_clip(id)
         .await
         .map_err(|e| e.to_string())?;
     state.search_engine.lock().await.remove_clip(id, "");
+
+    {
+        let mut history = state.clip_history.lock().await;
+        let index = history.current().iter().position(|c| c.id == id);
+        if let Some(idx) = index {
+            let new_version = history.current().remove_at(idx);
+            history.push(new_version);
+        }
+    }
+
+    let _ = app.emit("clip:deleted", id);
     Ok(())
+}
+
+#[tauri::command]
+pub async fn undo_delete(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Option<Clip>, String> {
+    let restored_id = {
+        let mut history = state.clip_history.lock().await;
+        let before: std::collections::HashSet<i64> =
+            history.current().iter().map(|c| c.id).collect();
+        match history.undo() {
+            Some(restored) => {
+                let after: std::collections::HashSet<i64> =
+                    restored.iter().map(|c| c.id).collect();
+                after.difference(&before).copied().next()
+            }
+            None => None,
+        }
+    };
+
+    let Some(id) = restored_id else {
+        return Ok(None);
+    };
+
+    let clip = state
+        .db
+        .restore_clip(id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if let Some(ref c) = clip {
+        state.search_engine.lock().await.index_clip(c.id, &c.content);
+        let _ = app.emit("clip:restored", c);
+    }
+    Ok(clip)
+}
+
+#[tauri::command]
+pub async fn get_clip_groups(state: State<'_, AppState>) -> Result<Vec<Vec<i64>>, String> {
+    let mut mgr = state.group_manager.lock().await;
+    Ok(mgr.all_groups())
+}
+
+#[tauri::command]
+pub async fn get_group_for_clip(
+    state: State<'_, AppState>,
+    clip_id: i64,
+) -> Result<Vec<i64>, String> {
+    let mut mgr = state.group_manager.lock().await;
+    Ok(mgr.get_group(clip_id))
 }
 
 #[tauri::command]

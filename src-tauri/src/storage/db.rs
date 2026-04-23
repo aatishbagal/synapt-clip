@@ -174,6 +174,16 @@ impl Db {
         Ok(())
     }
 
+    /// Clear the `deleted_at` timestamp for a previously soft-deleted clip.
+    pub async fn restore_clip(&self, id: i64) -> Result<Option<Clip>, DbError> {
+        sqlx::query("UPDATE clips SET deleted_at = NULL WHERE id = ?")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+
+        self.get_clip_by_id(id).await
+    }
+
     pub async fn hard_delete_clip(&self, id: i64) -> Result<(), DbError> {
         sqlx::query("DELETE FROM clips WHERE id = ? AND pinned = 0")
             .bind(id)
