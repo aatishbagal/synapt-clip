@@ -251,14 +251,18 @@ export function Panel({ onOpenSettings }: PanelProps) {
       tabIndex={0}
       onKeyDown={handleKeyDown}
       className="flex flex-col w-screen h-screen overflow-hidden focus:outline-none relative"
-      style={{ backgroundColor: "#1a1a1a", color: "#ffffff", borderRadius: "8px" }}
+      style={{
+        backgroundColor: "var(--bg)",
+        color: "var(--text)",
+        borderRadius: "8px",
+      }}
     >
       <div
         className="flex items-center justify-between px-3 shrink-0"
         style={{
           height: "40px",
-          borderBottom: "1px solid #333333",
-          backgroundColor: "#1a1a1a",
+          borderBottom: "1px solid var(--border)",
+          backgroundColor: "var(--bg)",
         }}
       >
         <div className="flex items-center gap-2">
@@ -268,7 +272,7 @@ export function Panel({ onOpenSettings }: PanelProps) {
             className="h-4 w-4"
           />
           <span className="text-xs font-medium">SynaptClip</span>
-          <span className="text-xs" style={{ color: "#555555" }}>
+          <span className="text-xs" style={{ color: "var(--muted)" }}>
             {VERSION}
           </span>
         </div>
@@ -279,8 +283,8 @@ export function Panel({ onOpenSettings }: PanelProps) {
               <button
                 type="button"
                 onClick={handleBulkDelete}
-                className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-[#2a2a2a] transition-colors"
-                style={{ color: "#ef4444" }}
+                className="flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors"
+                style={{ color: "var(--danger)" }}
               >
                 <Trash2 size={12} />
                 Delete selected ({selectedIds.size})
@@ -291,8 +295,8 @@ export function Panel({ onOpenSettings }: PanelProps) {
                   setBulkMode(false);
                   setSelectedIds(new Set());
                 }}
-                className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-[#2a2a2a] transition-colors"
-                style={{ color: "#888888" }}
+                className="flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors"
+                style={{ color: "var(--muted)" }}
               >
                 <X size={12} />
                 Cancel
@@ -305,8 +309,8 @@ export function Panel({ onOpenSettings }: PanelProps) {
                   type="button"
                   onClick={handleUndo}
                   title="Undo last delete"
-                  className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-[#2a2a2a] transition-colors"
-                  style={{ color: "#888888" }}
+                  className="flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors"
+                  style={{ color: "var(--muted)" }}
                 >
                   <Undo2 size={12} />
                 </button>
@@ -315,8 +319,8 @@ export function Panel({ onOpenSettings }: PanelProps) {
                 type="button"
                 onClick={() => setBulkMode(true)}
                 title="Select multiple"
-                className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-[#2a2a2a] transition-colors"
-                style={{ color: "#888888" }}
+                className="flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors"
+                style={{ color: "var(--muted)" }}
               >
                 <CheckSquare size={12} />
                 Select
@@ -325,8 +329,8 @@ export function Panel({ onOpenSettings }: PanelProps) {
                 type="button"
                 onClick={handleClearHistory}
                 title="Clear history"
-                className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-[#2a2a2a] transition-colors"
-                style={{ color: "#888888" }}
+                className="flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors"
+                style={{ color: "var(--muted)" }}
               >
                 <Trash2 size={12} />
               </button>
@@ -335,8 +339,8 @@ export function Panel({ onOpenSettings }: PanelProps) {
                   type="button"
                   onClick={onOpenSettings}
                   title="Settings"
-                  className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-[#2a2a2a] transition-colors"
-                  style={{ color: "#888888" }}
+                  className="flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors"
+                  style={{ color: "var(--muted)" }}
                 >
                   <SettingsIcon size={12} />
                 </button>
@@ -350,16 +354,17 @@ export function Panel({ onOpenSettings }: PanelProps) {
         <div
           className="flex items-start justify-between gap-2 px-3 py-2 shrink-0 text-xs"
           style={{
-            backgroundColor: "#3a2e14",
-            borderBottom: "1px solid #553c18",
-            color: "#fef08a",
+            backgroundColor: "var(--warning-bg)",
+            borderBottom: "1px solid var(--warning-border)",
+            color: "var(--warning-text)",
           }}
         >
           <span className="flex-1">{setupWarning}</span>
           <button
             type="button"
             onClick={() => setSetupWarning(null)}
-            className="shrink-0 rounded hover:bg-[#4a3a1a] p-0.5"
+            className="shrink-0 rounded p-0.5"
+            style={{ color: "var(--warning-text)" }}
           >
             <X size={12} />
           </button>
@@ -387,7 +392,7 @@ export function Panel({ onOpenSettings }: PanelProps) {
       {isSearching ? (
         searchResults.length === 0 ? (
           <div className="flex-1 flex items-center justify-center">
-            <p className="text-sm" style={{ color: "#888888" }}>
+            <p className="text-sm" style={{ color: "var(--muted)" }}>
               No results for &ldquo;{activeQuery}&rdquo;
             </p>
           </div>

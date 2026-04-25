@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { Copy, Check, Trash2, Pin } from "lucide-react";
 import type { Clip } from "../types/clip";
 import { buildHighlightSegments } from "../utils/highlight";
+import { relativeTime } from "../utils/time";
 
 interface ClipCardProps {
   clip: Clip;
@@ -14,20 +15,6 @@ interface ClipCardProps {
   hideDelete?: boolean;
   onRightClick?: (e: React.MouseEvent) => void;
   onToggleSelect?: (id: number) => void;
-}
-
-function formatRelativeTime(isoDate: string): string {
-  const now = Date.now();
-  const then = new Date(isoDate + "Z").getTime();
-  const seconds = Math.floor((now - then) / 1000);
-
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
 }
 
 function formatBytes(n: number): string {
@@ -108,8 +95,8 @@ export function ClipCard({
     clip.was_compressed && clip.original_size > 0 && clip.compressed_size > 0;
 
   const highlighted = selected || isSelected;
-  const baseBg = highlighted ? "#2a2a2a" : "transparent";
-  const selectionBorder = isSelected ? "#3b82f6" : "#333333";
+  const baseBg = highlighted ? "var(--surface-hover)" : "transparent";
+  const selectionBorder = isSelected ? "var(--accent)" : "var(--border)";
 
   return (
     <div
@@ -122,12 +109,14 @@ export function ClipCard({
       }}
       onMouseEnter={(e) => {
         if (!highlighted) {
-          (e.currentTarget as HTMLDivElement).style.backgroundColor = "#2a2a2a";
+          (e.currentTarget as HTMLDivElement).style.backgroundColor =
+            "var(--surface-hover)";
         }
       }}
       onMouseLeave={(e) => {
         if (!highlighted) {
-          (e.currentTarget as HTMLDivElement).style.backgroundColor = "transparent";
+          (e.currentTarget as HTMLDivElement).style.backgroundColor =
+            "transparent";
         }
       }}
     >
@@ -138,15 +127,15 @@ export function ClipCard({
           readOnly
           onClick={(e) => e.stopPropagation()}
           className="shrink-0"
-          style={{ accentColor: "#3b82f6" }}
+          style={{ accentColor: "var(--accent)" }}
         />
       )}
 
       <div className="flex-1 min-w-0 flex flex-col gap-0.5">
         <div className="flex items-baseline gap-2 min-w-0">
           <span
-            className="truncate text-[13px] text-white"
-            style={{ fontFamily: "monospace" }}
+            className="truncate text-[13px]"
+            style={{ fontFamily: "monospace", color: "var(--text)" }}
           >
             {segments
               ? segments.map((seg, i) =>
@@ -154,8 +143,8 @@ export function ClipCard({
                     <span
                       key={i}
                       style={{
-                        backgroundColor: "#854d0e",
-                        color: "#fef08a",
+                        backgroundColor: "var(--highlight-bg)",
+                        color: "var(--highlight-text)",
                       }}
                     >
                       {seg.text}
@@ -167,7 +156,10 @@ export function ClipCard({
               : text}
           </span>
           {extraLines > 0 && (
-            <span className="text-xs shrink-0" style={{ color: "#888888" }}>
+            <span
+              className="text-xs shrink-0"
+              style={{ color: "var(--muted)" }}
+            >
               +{extraLines} lines
             </span>
           )}
@@ -177,17 +169,18 @@ export function ClipCard({
             <span
               className="text-[10px] px-1.5 py-0.5 rounded"
               style={{
-                backgroundColor: "#2a2a2a",
-                color: "#a1a1aa",
-                border: "1px solid #333333",
+                backgroundColor: "var(--surface-hover)",
+                color: "var(--muted)",
+                border: "1px solid var(--border)",
               }}
             >
               {clip.category}
             </span>
           )}
           {showCompressionStat && (
-            <span className="text-xs" style={{ color: "#888888" }}>
-              {formatBytes(clip.original_size)} -&gt; {formatBytes(clip.compressed_size)}
+            <span className="text-xs" style={{ color: "var(--muted)" }}>
+              {formatBytes(clip.original_size)} -&gt;{" "}
+              {formatBytes(clip.compressed_size)}
             </span>
           )}
         </div>
@@ -195,22 +188,27 @@ export function ClipCard({
 
       <div className="flex items-center gap-1.5 shrink-0">
         {clip.pinned && (
-          <Pin size={12} style={{ color: "#f59e0b" }} aria-label="Pinned" />
+          <Pin
+            size={12}
+            style={{ color: "var(--warning)" }}
+            aria-label="Pinned"
+          />
         )}
-        <span className="text-xs" style={{ color: "#888888" }}>
-          {formatRelativeTime(clip.created_at)}
+        <span className="text-xs" style={{ color: "var(--muted)" }}>
+          {relativeTime(clip.created_at)}
         </span>
 
         {!bulkMode && (
           <button
             onClick={handleCopyButton}
             title="Copy"
-            className="p-1 rounded hover:bg-[#333333] transition-colors"
+            className="p-1 rounded transition-colors"
+            style={{ color: "var(--muted)" }}
           >
             {copied ? (
-              <Check size={14} className="text-green-400" />
+              <Check size={14} style={{ color: "var(--success)" }} />
             ) : (
-              <Copy size={14} style={{ color: "#888888" }} />
+              <Copy size={14} />
             )}
           </button>
         )}
@@ -219,7 +217,8 @@ export function ClipCard({
           <button
             onClick={handleDelete}
             title="Delete"
-            className="p-1 rounded hover:bg-[#333333] text-[#888888] hover:text-red-400 transition-colors"
+            className="p-1 rounded transition-colors"
+            style={{ color: "var(--muted)" }}
           >
             <Trash2 size={14} />
           </button>

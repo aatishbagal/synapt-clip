@@ -14,10 +14,12 @@ const BASE_TABS: { id: string; label: string }[] = [
   { id: "groups", label: "Groups" },
 ];
 
-const BORDER = "#333333";
-const ACCENT = "#3b82f6";
-const TEXT = "#ffffff";
-const MUTED = "#888888";
+const BORDER = "var(--border)";
+const ACCENT = "var(--accent)";
+const TEXT = "var(--text)";
+const MUTED = "var(--muted)";
+const DANGER = "var(--danger)";
+const TAB_BG = "var(--surface)";
 
 export function CategoryTabs({
   categories,
@@ -56,7 +58,7 @@ export function CategoryTabs({
             }}
             title={confirmDelete === id ? "Click again to confirm" : "Delete category"}
             style={{
-              color: confirmDelete === id ? "#ef4444" : MUTED,
+              color: confirmDelete === id ? DANGER : MUTED,
             }}
           >
             <X size={12} />
@@ -71,7 +73,7 @@ export function CategoryTabs({
       className="flex items-center shrink-0 overflow-x-auto"
       style={{
         borderBottom: `1px solid ${BORDER}`,
-        backgroundColor: "#1f1f1f",
+        backgroundColor: TAB_BG,
       }}
     >
       {BASE_TABS.map((t) => renderTab(t.id, t.label, false))}

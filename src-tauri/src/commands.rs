@@ -1,7 +1,10 @@
+use std::collections::HashMap;
+
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::dsa::PersistentList;
+use crate::platform::{detect_backend, ClipboardBackend};
 use crate::storage::Clip;
 use crate::AppState;
 
@@ -303,4 +306,97 @@ pub async fn clear_history(
 
     let _ = app.emit("history:cleared", count);
     Ok(count)
+}
+
+#[tauri::command]
+pub async fn get_settings(state: State<'_, AppState>) -> Result<HashMap<String, String>, String> {
+    state
+        .db
+        .get_all_settings()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn set_setting(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    key: String,
+    value: String,
+) -> Result<(), String> {
+    state
+        .db
+        .set_setting(&key, &value)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    match key.as_str() {
+        "history_limit" => {
+            if let Ok(limit) = value.parse::<i64>() {
+                if limit > 0 {
+                    state
+                        .db
+                        .enforce_history_limit(limit)
+                        .await
+                        .map_err(|e| e.to_string())?;
+                }
+            }
+        }
+        "expiry_days" => {
+            if let Ok(days) = value.parse::<i64>() {
+                if days > 0 {
+                    state
+                        .db
+                        .expire_older_than_days(days)
+                        .await
+                        .map_err(|e| e.to_string())?;
+                }
+            }
+        }
+        "theme" => {
+            let _ = app.emit("settings:theme_changed", &value);
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PlatformInfo {
+    pub backend: String,
+    pub session_type: String,
+    pub gch_installed: bool,
+}
+
+#[tauri::command]
+pub async fn get_platform_info() -> Result<PlatformInfo, String> {
+    let backend = detect_backend();
+    let backend_str = match backend {
+        ClipboardBackend::Arboard => "arboard",
+        ClipboardBackend::WlrDataControl => "wlr",
+        ClipboardBackend::GchFile => "gch",
+    }
+    .to_string();
+
+    let session_type = if cfg!(target_os = "windows") {
+        "windows".to_string()
+    } else {
+        std::env::var("XDG_SESSION_TYPE").unwrap_or_else(|_| "x11".to_string())
+    };
+
+    let gch_installed = dirs::data_dir()
+        .map(|d| {
+            d.join("gnome-shell")
+                .join("extensions")
+                .join("clipboard-history@alexsaveau.dev")
+                .join("database.log")
+                .exists()
+        })
+        .unwrap_or(false);
+
+    Ok(PlatformInfo {
+        backend: backend_str,
+        session_type,
+        gch_installed,
+    })
 }

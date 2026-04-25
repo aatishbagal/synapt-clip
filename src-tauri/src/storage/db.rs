@@ -351,4 +351,49 @@ impl Db {
                 .await?;
         Ok(rows.into_iter().map(|(id, name)| (name, id)).collect())
     }
+
+    /// Read a single setting value by key.
+    pub async fn get_setting(&self, key: &str) -> Result<Option<String>, DbError> {
+        let row: Option<(String,)> = sqlx::query_as("SELECT value FROM settings WHERE key = ?")
+            .bind(key)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(row.map(|r| r.0))
+    }
+
+    /// Upsert a single setting value.
+    pub async fn set_setting(&self, key: &str, value: &str) -> Result<(), DbError> {
+        sqlx::query(
+            "INSERT INTO settings (key, value) VALUES (?, ?) \
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        )
+        .bind(key)
+        .bind(value)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Soft-delete every non-pinned clip older than `days` days. Returns the row count.
+    pub async fn expire_older_than_days(&self, days: i64) -> Result<u64, DbError> {
+        let cutoff = format!("-{days} days");
+        let result = sqlx::query(
+            "UPDATE clips SET deleted_at = datetime('now') \
+             WHERE pinned = 0 AND deleted_at IS NULL \
+             AND created_at < datetime('now', ?)",
+        )
+        .bind(cutoff)
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected())
+    }
+
+    /// Return all settings as a key/value map.
+    pub async fn get_all_settings(&self) -> Result<HashMap<String, String>, DbError> {
+        let rows: Vec<(String, String)> =
+            sqlx::query_as("SELECT key, value FROM settings")
+                .fetch_all(&self.pool)
+                .await?;
+        Ok(rows.into_iter().collect())
+    }
 }

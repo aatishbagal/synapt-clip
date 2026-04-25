@@ -94,11 +94,11 @@ export function SearchBar({ onResults, onClear, onEscape }: SearchBarProps) {
       className="flex items-center gap-2 px-3 shrink-0"
       style={{
         height: "48px",
-        backgroundColor: "#242424",
-        borderBottom: "1px solid #333333",
+        backgroundColor: "var(--surface)",
+        borderBottom: "1px solid var(--border)",
       }}
     >
-      <Search size={16} style={{ color: "#888888" }} className="shrink-0" />
+      <Search size={16} style={{ color: "var(--muted)" }} className="shrink-0" />
       <input
         ref={inputRef}
         type="text"
@@ -106,22 +106,24 @@ export function SearchBar({ onResults, onClear, onEscape }: SearchBarProps) {
         onChange={handleChange}
         onKeyDown={handleKeyDown}
         placeholder="Search clips..."
-        className="flex-1 bg-transparent text-sm text-white outline-none placeholder-[#666666]"
+        className="flex-1 bg-transparent text-sm outline-none"
+        style={{ color: "var(--text)" }}
       />
       {loading && (
         <Loader2
           size={14}
           className="animate-spin shrink-0"
-          style={{ color: "#888888" }}
+          style={{ color: "var(--muted)" }}
         />
       )}
       {query && !loading && (
         <button
           onClick={handleClear}
           title="Clear"
-          className="p-1 rounded hover:bg-[#333333] transition-colors"
+          className="p-1 rounded transition-colors"
+          style={{ color: "var(--muted)" }}
         >
-          <X size={14} style={{ color: "#888888" }} />
+          <X size={14} />
         </button>
       )}
     </div>

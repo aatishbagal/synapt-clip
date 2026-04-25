@@ -15,9 +15,18 @@ interface ClipListProps {
 
 function SkeletonRow() {
   return (
-    <div className="flex items-center gap-2 px-3 py-2.5 border-b" style={{ borderColor: "#333333" }}>
-      <div className="flex-1 h-4 rounded animate-pulse" style={{ backgroundColor: "#333333" }} />
-      <div className="w-10 h-3 rounded animate-pulse" style={{ backgroundColor: "#333333" }} />
+    <div
+      className="flex items-center gap-2 px-3 py-2.5 border-b"
+      style={{ borderColor: "var(--border)" }}
+    >
+      <div
+        className="flex-1 h-4 rounded animate-pulse"
+        style={{ backgroundColor: "var(--surface-hover)" }}
+      />
+      <div
+        className="w-10 h-3 rounded animate-pulse"
+        style={{ backgroundColor: "var(--surface-hover)" }}
+      />
     </div>
   );
 }
@@ -46,7 +55,7 @@ export function ClipList({
   if (clips.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <p className="text-sm" style={{ color: "#888888" }}>
+        <p className="text-sm" style={{ color: "var(--muted)" }}>
           {emptyMessage ?? "No clipboard history yet"}
         </p>
       </div>

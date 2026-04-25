@@ -8,9 +8,10 @@ interface GroupsViewProps {
   onCopy: (id: number) => void;
 }
 
-const BORDER = "#333333";
-const MUTED = "#888888";
-const BADGE_BG = "#2a2a2a";
+const BORDER = "var(--border)";
+const MUTED = "var(--muted)";
+const BADGE_BG = "var(--surface-hover)";
+const TEXT = "var(--text)";
 
 export function GroupsView({ onCopy }: GroupsViewProps) {
   const [groups, setGroups] = useState<number[][]>([]);
@@ -96,7 +97,7 @@ export function GroupsView({ onCopy }: GroupsViewProps) {
               ) : (
                 <ChevronRight size={14} style={{ color: MUTED }} />
               )}
-              <span className="text-xs" style={{ color: "#ffffff" }}>
+              <span className="text-xs" style={{ color: TEXT }}>
                 Group {i + 1}
               </span>
               <span

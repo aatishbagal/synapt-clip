@@ -13,11 +13,13 @@ interface ContextMenuProps {
   onDelete: () => void;
 }
 
-const MENU_BG = "#242424";
-const MENU_BORDER = "#333333";
-const MENU_HOVER = "#2f2f2f";
-const TEXT = "#ffffff";
-const MUTED = "#888888";
+const MENU_BG = "var(--surface)";
+const MENU_BORDER = "var(--border)";
+const MENU_HOVER = "var(--surface-hover)";
+const TEXT = "var(--text)";
+const MUTED = "var(--muted)";
+const DANGER = "var(--danger)";
+const INPUT_BG = "var(--bg)";
 
 export function ContextMenu({
   x,
@@ -187,7 +189,7 @@ export function ContextMenu({
                 onClick={(e) => e.stopPropagation()}
                 className="w-full text-xs px-2 py-1 rounded outline-none"
                 style={{
-                  backgroundColor: "#1a1a1a",
+                  backgroundColor: INPUT_BG,
                   border: `1px solid ${MENU_BORDER}`,
                   color: TEXT,
                 }}
@@ -202,7 +204,7 @@ export function ContextMenu({
       <button
         type="button"
         className={itemClass}
-        style={{ color: "#ef4444" }}
+        style={{ color: DANGER }}
         onMouseEnter={(e) => {
           e.currentTarget.style.backgroundColor = MENU_HOVER;
         }}

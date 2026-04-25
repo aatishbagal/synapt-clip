@@ -5,6 +5,7 @@ mod platform;
 mod search;
 mod storage;
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use tauri::{
@@ -21,6 +22,7 @@ use crate::search::engine::SearchEngine;
 use crate::storage::Clip;
 
 const HISTORY_LIMIT: usize = 500;
+const TRAY_ID: &str = "main";
 
 pub struct AppState {
     pub db: Arc<storage::Db>,
@@ -28,6 +30,19 @@ pub struct AppState {
     pub expiry_depq: Arc<Mutex<Depq<(String, i64)>>>,
     pub clip_history: Arc<Mutex<VersionHistory<Clip>>>,
     pub group_manager: Arc<Mutex<ClipGroupManager>>,
+    pub clip_count: Arc<AtomicUsize>,
+}
+
+fn update_tray_tooltip(app: &tauri::AppHandle, count: usize) {
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        let _ = tray.set_tooltip(Some(format!("SynaptClip — {count} clips")));
+    }
+}
+
+fn set_tray_warning(app: &tauri::AppHandle) {
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        let _ = tray.set_tooltip(Some("SynaptClip — setup required"));
+    }
 }
 
 pub fn run() {
@@ -37,7 +52,7 @@ pub fn run() {
         )
         .init();
 
-    tracing::info!("Starting SynaptClip v0.2.0");
+    tracing::info!("Starting SynaptClip v0.3.0");
 
     let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
 
@@ -87,6 +102,7 @@ pub fn run() {
     let expiry_depq = Arc::new(Mutex::new(depq));
     let clip_history = Arc::new(Mutex::new(VersionHistory::new(initial_version)));
     let group_manager = Arc::new(Mutex::new(group_manager));
+    let clip_count = Arc::new(AtomicUsize::new(initial_clips.len()));
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -96,13 +112,18 @@ pub fn run() {
             expiry_depq: expiry_depq.clone(),
             clip_history: clip_history.clone(),
             group_manager: group_manager.clone(),
+            clip_count: clip_count.clone(),
         })
         .setup(move |app| {
             let show = MenuItem::with_id(app, "show", "Show SynaptClip", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &quit])?;
 
-            TrayIconBuilder::new()
+            TrayIconBuilder::with_id(TRAY_ID)
+                .tooltip(format!(
+                    "SynaptClip — {} clips",
+                    clip_count.load(Ordering::Relaxed)
+                ))
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => {
@@ -158,6 +179,7 @@ pub fn run() {
             let depq_writer = expiry_depq.clone();
             let history_writer = clip_history.clone();
             let group_writer = group_manager.clone();
+            let count_writer = clip_count.clone();
 
             let setup_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -169,9 +191,11 @@ pub fn run() {
                             "watcher:setup_required",
                             serde_json::json!({ "message": msg }),
                         );
+                        set_tray_warning(&setup_handle);
                     }
                     Err(e) => {
                         tracing::error!("Clipboard watcher error: {e}");
+                        set_tray_warning(&setup_handle);
                     }
                 }
             });
@@ -239,6 +263,9 @@ pub fn run() {
                                 tracing::warn!("Failed to emit clip:new event: {e}");
                             }
 
+                            let new_count = count_writer.fetch_add(1, Ordering::Relaxed) + 1;
+                            update_tray_tooltip(&app_handle, new_count);
+
                             let mut depq_guard = depq_writer.lock().await;
                             while depq_guard.len() > HISTORY_LIMIT {
                                 if let Some((_, evict_id)) = depq_guard.pop_min() {
@@ -280,6 +307,9 @@ pub fn run() {
             commands::delete_category,
             commands::bulk_delete,
             commands::clear_history,
+            commands::get_settings,
+            commands::set_setting,
+            commands::get_platform_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
