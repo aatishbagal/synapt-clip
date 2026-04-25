@@ -17,8 +17,8 @@ function applyTheme(theme: Theme) {
 }
 
 export function App() {
-  const [showSettings, setShowSettings] = useState(false);
   const [visible, setVisible] = useState(false);
+  const isSettings = window.location.hash === "#settings";
 
   useEffect(() => {
     const id = window.setTimeout(() => setVisible(true), 0);
@@ -40,15 +40,27 @@ export function App() {
     };
   }, []);
 
+  const handleOpenSettings = () => {
+    invoke("open_settings").catch((err) =>
+      console.error("Failed to open settings:", err),
+    );
+  };
+
+  const handleCloseSettings = () => {
+    invoke("close_settings").catch((err) =>
+      console.error("Failed to close settings:", err),
+    );
+  };
+
   return (
     <div
       className={visible ? "panel-root panel-visible" : "panel-root"}
       style={{ width: "100vw", height: "100vh" }}
     >
-      {showSettings ? (
-        <Settings onClose={() => setShowSettings(false)} />
+      {isSettings ? (
+        <Settings onClose={handleCloseSettings} />
       ) : (
-        <Panel onOpenSettings={() => setShowSettings(true)} />
+        <Panel onOpenSettings={handleOpenSettings} />
       )}
     </div>
   );

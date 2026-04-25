@@ -128,6 +128,7 @@ pub fn run() {
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => {
                         if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.center();
                             let _ = window.show();
                             let _ = window.set_focus();
                         }
@@ -150,6 +151,7 @@ pub fn run() {
                             if visible {
                                 let _ = window.hide();
                             } else {
+                                let _ = window.center();
                                 let _ = window.show();
                                 let _ = window.set_focus();
                             }
@@ -163,6 +165,16 @@ pub fn run() {
                 window.on_window_event(move |event| {
                     if let tauri::WindowEvent::Focused(false) = event {
                         let _ = w.hide();
+                    }
+                });
+            }
+
+            if let Some(settings_window) = app.get_webview_window("settings") {
+                let s = settings_window.clone();
+                settings_window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = s.hide();
                     }
                 });
             }
@@ -310,6 +322,8 @@ pub fn run() {
             commands::get_settings,
             commands::set_setting,
             commands::get_platform_info,
+            commands::open_settings,
+            commands::close_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

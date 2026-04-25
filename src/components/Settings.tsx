@@ -202,7 +202,14 @@ export function Settings({ onClose }: SettingsProps) {
           backgroundColor: "var(--bg)",
         }}
       >
-        <span className="text-xs font-medium">Settings</span>
+        <div className="flex items-center gap-2">
+          <img
+            src="/assets/images/logo/png/SynaptV2_White_PNG.png"
+            alt="SynaptClip"
+            className="h-4 w-4"
+          />
+          <span className="text-xs font-medium">SynaptClip Settings</span>
+        </div>
         <button
           type="button"
           onClick={onClose}

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::dsa::PersistentList;
 use crate::platform::{detect_backend, ClipboardBackend};
@@ -399,4 +399,25 @@ pub async fn get_platform_info() -> Result<PlatformInfo, String> {
         session_type,
         gch_installed,
     })
+}
+
+/// Show and focus the dedicated settings window.
+#[tauri::command]
+pub async fn open_settings(app: AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window("settings")
+        .ok_or_else(|| "settings window not found".to_string())?;
+    window.center().map_err(|e| e.to_string())?;
+    window.show().map_err(|e| e.to_string())?;
+    window.set_focus().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Hide the dedicated settings window.
+#[tauri::command]
+pub async fn close_settings(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("settings") {
+        window.hide().map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
