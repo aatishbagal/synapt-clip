@@ -105,8 +105,9 @@ The search layer lives entirely in the Rust backend. It does not use synapt-core
 
 | Structure | Implementation | Purpose |
 |---|---|---|
-| Trie | Custom Rust, built in-memory from SQLite on launch | Prefix search on clip text |
-| Levenshtein distance | Custom Rust | Fuzzy matching for typos and partial terms |
+| Trie | Custom Rust, compressed trie (radix/Patricia), built in-memory from SQLite on launch | Prefix search on clip text |
+| Suffix Array | Custom Rust, per-clip index, binary search for substring match | Substring search; second tier after prefix |
+| Levenshtein distance | Custom Rust | Fuzzy matching for typos and partial terms; fallback when prefix and substring return empty |
 | Ranking | Recency + pinned boost | Pinned clips ranked above unpinned, recency as tiebreaker |
 
 The Trie is rebuilt from the database on each app launch and updated incrementally as new clips arrive. It is not persisted to disk.

@@ -97,26 +97,18 @@ See `references/docs/` for the source of truth on architecture and development g
 
 ## Data Structures and Algorithms
 
-### Implemented
+Every data structure below is implemented in the Rust backend, wired into the active code path, and covered by unit tests.
 
-| Feature | DSA Concept |
-|---|---|
-| Thread-safe communication between watcher and storage tasks | Concurrent Channels (mpsc) |
+| Concept | Syllabus Unit | Used For |
+|---|---|---|
+| Compressed Trie (Patricia Trie) | Unit 3 — Data Structures for Strings | Prefix search on clip content; reused for auto-category classification in v0.4 |
+| Suffix Array | Unit 3 — Data Structures for Strings | Substring search across all clip content; second search tier after prefix |
+| Levenshtein Distance | Unit 3 — Dictionaries Allowing Errors | Fuzzy search fallback when prefix and substring search return no results |
+| Huffman Tree | Unit 1 — Advanced Trees | Clip content compression before SQLite storage for clips over 512 bytes |
+| Bloom Filter | Unit 6 — Succinct Representations | Duplicate detection before SQLite insert; bit vector with FNV1a and DJB2 hash functions |
+| Persistent Linked List | Unit 6 — Persistent Data Structures | Non-destructive clip delete; undo restores previous version without mutating history |
+| Disjoint Set Union-Find | Unit 6 — Miscellaneous | Automatic clip grouping by source app and content prefix; path compression and union by rank |
+| Double Ended Priority Queue | Unit 6 — Miscellaneous | History limit enforcement; oldest clips evicted by minimum timestamp when limit exceeded |
+| Concurrent Channels (mpsc) | Unit 6 — Concurrent Data Structures | Thread-safe message passing between clipboard watcher task and storage layer |
 
-### Planned
-
-| Feature | DSA Concept |
-|---|---|
-| Prefix search on clip content | Compressed Trie (Patricia Trie) |
-| Substring search across all clip content | Suffix Array |
-| Fuzzy search fallback for typo tolerance | Levenshtein Distance |
-| Clip content compression before SQLite storage | Huffman Tree |
-| Auto-expiry scheduler, oldest and newest clip access | Double Ended Priority Queue |
-| Fast duplicate detection before insert | Bloom Filter (Bit Vector) |
-| Non-destructive clip delete with undo support | Persistent Linked List |
-| Automatic clip grouping by source or prefix pattern | Disjoint Set Union-Find |
-| Alternative sorted clip list with probabilistic balancing | Skip List |
-| Clip ranking by score and recency | Treap |
-| Self-adjusting tree that moves recently accessed clips to root | Splay Tree |
-| Guaranteed O(log n) sorted retrieval by timestamp or score | AVL or Red-Black Tree |
-| Compact index of all substrings for memory-efficient search | DAWG |
+The Trie serves two roles in SynaptClip: it is the primary data structure for prefix search over clipboard history, and in v0.4 it is reused as a classifier to detect content type (links, file paths) for auto-categorization. This dual use demonstrates that the same data structure can solve structurally different problems — search and classification — with no additional memory cost beyond the classifier entries.
