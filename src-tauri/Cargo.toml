@@ -1,11 +1,12 @@
 [package]
 name = "synapt-clip"
-version = "0.1.0"
+version = "0.4.0"
 edition = "2021"
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-shell = "2"
+tauri-plugin-global-shortcut = "2"
 tokio = { version = "1", features = ["full"] }
 sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio", "migrate"] }
 arboard = "3"
@@ -16,6 +17,9 @@ thiserror = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 async-trait = "0.1"
+dirs = "6"
+notify = "6"
+rand = "0.8"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

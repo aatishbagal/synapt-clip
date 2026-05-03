@@ -6,4 +6,8 @@ export interface Clip {
   source_app: string | null;
   pinned: boolean;
   deleted_at: string | null;
+  was_compressed: boolean;
+  original_size: number;
+  compressed_size: number;
+  category: string | null;
 }

@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicedoc/tauri/dev/crates/tauri-config-schema/schema.json",
   "productName": "SynaptClip",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "identifier": "dev.synapt.clip",
   "build": {
     "frontendDist": "../dist",
@@ -14,12 +14,28 @@
       {
         "label": "main",
         "title": "SynaptClip",
-        "width": 400,
-        "height": 600,
+        "width": 680,
+        "height": 480,
         "resizable": false,
         "decorations": false,
         "alwaysOnTop": true,
-        "visible": false
+        "visible": false,
+        "center": true
+      },
+      {
+        "label": "settings",
+        "title": "SynaptClip Settings",
+        "url": "index.html#settings",
+        "width": 540,
+        "height": 620,
+        "minWidth": 480,
+        "minHeight": 520,
+        "resizable": true,
+        "decorations": true,
+        "alwaysOnTop": false,
+        "visible": false,
+        "center": true,
+        "skipTaskbar": false
       }
     ],
     "trayIcon": {

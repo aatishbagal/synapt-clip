@@ -55,9 +55,9 @@ This forces the app into XWayland mode. The arboard backend works normally. No s
 | Version | Name | Key Deliverable | Demo-ready |
 |---|---|---|---|
 | v0.1 | Foundation | Clip capture and panel UI on X11 | No |
-| v0.2 | Search | DSA search layer, keyboard nav | No |
-| v0.3 | Wayland + Polish | Full platform support, settings, UI complete | Yes — professor demo |
-| v0.4 | Windows + Stability | Windows support, auto-start, reliability pass | No |
+| v0.2 | Search | DSA search layer, Huffman compression, keyboard nav | No |
+| v0.3 | Wayland + Polish | Full platform support, persistent undo, Union-Find grouping, UI complete | Yes — professor demo |
+| v0.4 | DSA Expansion + System | Skip List ranking, auto-categorization, global hotkey, auto-start, error logging, onboarding | Yes — professor demo |
 | v0.5 | Synapt Bridge | Cross-device clipboard via Synapt | No |
 | v1.0 | Release | Installable, documented, stable | Yes — public release |
 
@@ -105,8 +105,9 @@ The search layer lives entirely in the Rust backend. It does not use synapt-core
 
 | Structure | Implementation | Purpose |
 |---|---|---|
-| Trie | Custom Rust, built in-memory from SQLite on launch | Prefix search on clip text |
-| Levenshtein distance | Custom Rust | Fuzzy matching for typos and partial terms |
+| Trie | Custom Rust, compressed trie (radix/Patricia), built in-memory from SQLite on launch | Prefix search on clip text |
+| Suffix Array | Custom Rust, per-clip index, binary search for substring match | Substring search; second tier after prefix |
+| Levenshtein distance | Custom Rust | Fuzzy matching for typos and partial terms; fallback when prefix and substring return empty |
 | Ranking | Recency + pinned boost | Pinned clips ranked above unpinned, recency as tiebreaker |
 
 The Trie is rebuilt from the database on each app launch and updated incrementally as new clips arrive. It is not persisted to disk.
@@ -118,6 +119,14 @@ The Trie is rebuilt from the database on each app launch and updated incremental
 - search_clips Tauri command: takes query string, returns ranked list of clip IDs and scores
 - Trie updated on every new clip captured, and on delete
 - Unit tests for Trie, Levenshtein, and ranking logic
+
+### Clip compression
+- Clip content longer than 512 bytes is compressed using Huffman encoding before storing in SQLite
+- Huffman tree is built from character frequencies of the clip content at insert time
+- Frequency table stored alongside compressed bytes to enable decompression on read
+- Clips too short to benefit from compression are stored raw with a flag
+- Panel clip card shows original size vs stored size as a muted stat line
+- DSA: Huffman Tree (Unit 1)
 
 ### Frontend
 - Search bar at top of panel, always visible
@@ -159,6 +168,19 @@ trait ClipboardWatcher: Send {
 - Bulk select mode: hold Shift and click to select multiple clips, then delete or categorize
 - Clear history action in panel header: deletes all non-pinned clips with confirmation prompt
 
+### Clip undo via persistent data structures
+- Deleting a clip creates a new version of the clip list rather than mutating it, implemented as a persistent linked list
+- An "Undo" action in the panel header restores the last deleted clip by reverting to the previous version
+- Version chain is kept in memory for the current session only, not persisted to SQLite
+- DSA: Persistent Data Structures (Unit 6)
+
+### Smart clip grouping via Union-Find
+- Automatic clip grouping using Disjoint Set Union-Find with path compression and weighted union
+- Clips are unioned when they share the same source app or match a prefix pattern
+- User can view clips by group in a separate Groups tab in the panel
+- Union and find operations run at O(alpha(n)) amortized
+- DSA: Disjoint Set Union-Find (Unit 6)
+
 ### Settings page
 - History limit: number of clips to retain (50 / 100 / 500 / 1000 / unlimited)
 - Default expiry: auto-delete non-pinned clips older than N days (off by default)
@@ -177,29 +199,55 @@ trait ClipboardWatcher: Send {
 
 ---
 
-## v0.4 — Windows Support and Stability
+## v0.4 — DSA Expansion and System Features
 
-Target: The app works correctly on Windows 10/11. The Linux experience is hardened based on usage since v0.3.
+Target: Two new DSA contributions (Skip List, Classification Trie), system-level features (global hotkey, auto-start, error logging), and a first-run onboarding experience.
 
-### Windows
-- Windows build compiles and runs without errors
-- arboard backend works on Win32
-- Auto-start on login via Windows registry entry
-- System tray via Tauri's tray API on Windows
-- Global hotkey working on Windows
-- Installer built via Tauri's NSIS bundler
+### New data structures
 
-### Linux stability
-- Auto-start on login via systemd user service file, installed by the app on first run
-- Recovery from wl-paste subprocess crash: restart the subprocess with exponential backoff
-- Recovery from GCH file watcher losing the file: re-establish watch on file recreation
-- Handle arboard errors gracefully (e.g. clipboard locked by another process)
-- Memory usage audit: Trie and in-memory structures profiled and bounded
+| Structure | Unit | Role |
+|---|---|---|
+| Skip List | Unit 4 — Randomized Data Structures | In-memory sorted clip index; probabilistic O(log n) insert, remove, and top-N lookup; score = recency decay + pinned boost |
+| Classification Trie (reuse of search Trie) | Unit 3 — Data Structures for Strings | Content-type classifier; same Trie struct as search, separate instance loaded with URL and file path prefixes |
 
-### General
-- Comprehensive error logging via tracing crate, log file written to platform data dir
-- Crash reporter: on panic, write a crash log with context to disk
-- First-run experience: brief onboarding shown on first launch explaining core features
+### Skip List ranking
+- Index-based arena implementation (no unsafe Rust): nodes stored in `Vec<Option<SkipNode>>` with free-list recycling
+- Score function: `1.0 / (1.0 + seconds_since_created) + if pinned { 0.5 } else { 0.0 }`
+- `get_ranked_clips` Tauri command returns a ranked list of clip IDs; Panel "all" tab merges this with full clip records
+- Skip List updated on every insert, delete, and pin toggle; no periodic rebuild required
+- 10 unit tests covering insert order, removal, top-N, score update, and duplicate handling
+
+### Auto-categorization via Classification Trie
+- ClipClassifier struct wraps a Trie pre-loaded with URL and file path prefixes
+- Detection order: empty → PlainText, trie hit + string check → Link / FilePath, `@` → Email, `#hex` → Color, keyword set → Code, PlainText
+- `trie_prefix_hit` tries lengths 1–9 of the lowercased content to find stored prefixes (resolves the direction mismatch between search Trie and classifier use case)
+- Auto-categories (Link, File Path, Code, Email, Color) appear as tabs in the panel alongside user-defined categories; visually distinguished with a muted "auto" badge
+- `get_auto_categories` Tauri command returns the fixed set of auto-category names
+- 14 unit tests covering all detection branches
+
+### Global hotkey
+- `tauri-plugin-global-shortcut` registered on launch; default `Super+Shift+V`
+- Configurable in Settings; saved to persistent settings store; takes effect immediately without restart
+- On trigger: centers and focuses the main window
+- Wayland note shown in Settings when GCH or Wayland session is detected
+
+### Auto-start (Linux)
+- Writes a systemd user service file to `~/.config/systemd/user/synaptclip.service` on first run
+- `ExecStart` set to the current executable path at install time
+- `is_service_installed` check prevents duplicate installs
+- `get_autostart_status` and `install_autostart` Tauri commands expose status and manual install to Settings UI
+
+### Error logging and crash reporting
+- `tracing-subscriber` writes structured logs to `~/.local/share/synaptclip/synaptclip.log` and stderr simultaneously via a custom `DualWriter` struct
+- Log rotation: file over 5 MB renamed to `synaptclip.log.old` on startup
+- Panic hook captures panic message + backtrace and appends a crash report block to the log file
+- Log file path exposed in Settings diagnostics section via `get_log_path` command
+
+### First-run onboarding
+- On first launch, an onboarding overlay is shown before the main panel
+- Covers three key features: clipboard capture, search and organization, hotkey access
+- Clicking "Get started" sets `first_run = "done"` in settings and dismisses the overlay
+- Onboarding is skipped on subsequent launches and never shown on the settings window
 
 ---
 
