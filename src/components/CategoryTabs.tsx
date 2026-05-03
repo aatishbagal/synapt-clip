@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { X } from "lucide-react";
 
 interface CategoryTabsProps {
@@ -28,9 +29,17 @@ export function CategoryTabs({
   onDeleteCategory,
 }: CategoryTabsProps) {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [autoCategories, setAutoCategories] = useState<string[]>([]);
+
+  useEffect(() => {
+    invoke<string[]>("get_auto_categories")
+      .then(setAutoCategories)
+      .catch(() => {});
+  }, []);
 
   const renderTab = (id: string, label: string, deletable: boolean) => {
     const isActive = active === id;
+    const isAuto = autoCategories.includes(id);
     return (
       <div
         key={id}
@@ -42,6 +51,18 @@ export function CategoryTabs({
         onClick={() => onChange(id)}
       >
         <span className="text-xs">{label}</span>
+        {isAuto && (
+          <span
+            className="text-[9px] px-1 py-0.5 rounded"
+            style={{
+              color: MUTED,
+              border: `1px solid ${BORDER}`,
+              lineHeight: 1,
+            }}
+          >
+            auto
+          </span>
+        )}
         {deletable && (
           <button
             type="button"

@@ -4,6 +4,8 @@ import type { Clip } from "../types/clip";
 import { buildHighlightSegments } from "../utils/highlight";
 import { relativeTime } from "../utils/time";
 
+const AUTO_CATEGORIES = new Set(["Link", "File Path", "Code", "Email", "Color"]);
+
 interface ClipCardProps {
   clip: Clip;
   onCopy: (id: number) => void;
@@ -168,11 +170,19 @@ export function ClipCard({
           {clip.category && (
             <span
               className="text-[10px] px-1.5 py-0.5 rounded"
-              style={{
-                backgroundColor: "var(--surface-hover)",
-                color: "var(--muted)",
-                border: "1px solid var(--border)",
-              }}
+              style={
+                AUTO_CATEGORIES.has(clip.category)
+                  ? {
+                      backgroundColor: "var(--surface-hover)",
+                      color: "var(--muted)",
+                      border: "1px solid var(--border)",
+                    }
+                  : {
+                      backgroundColor: "var(--surface-hover)",
+                      color: "var(--accent)",
+                      border: "1px solid var(--accent)",
+                    }
+              }
             >
               {clip.category}
             </span>

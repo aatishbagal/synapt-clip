@@ -16,7 +16,8 @@ use tauri::{
 use tokio::sync::Mutex;
 use tracing_subscriber::EnvFilter;
 
-use crate::dsa::{should_group, ClipGroupManager, PersistentList, VersionHistory};
+use crate::dsa::{should_group, ClipGroupManager, PersistentList, SkipList, VersionHistory};
+use crate::search::classifier::ClipClassifier;
 use crate::search::depq::Depq;
 use crate::search::engine::SearchEngine;
 use crate::storage::Clip;
@@ -30,7 +31,19 @@ pub struct AppState {
     pub expiry_depq: Arc<Mutex<Depq<(String, i64)>>>,
     pub clip_history: Arc<Mutex<VersionHistory<Clip>>>,
     pub group_manager: Arc<Mutex<ClipGroupManager>>,
+    pub clip_index: Arc<Mutex<SkipList>>,
+    pub classifier: Arc<ClipClassifier>,
     pub clip_count: Arc<AtomicUsize>,
+}
+
+pub fn clip_score(created_at: &str, pinned: bool) -> f64 {
+    let seconds = chrono::NaiveDateTime::parse_from_str(created_at, "%Y-%m-%d %H:%M:%S")
+        .map(|dt| {
+            let now = chrono::Utc::now().naive_utc();
+            (now - dt).num_seconds().max(0) as f64
+        })
+        .unwrap_or(0.0);
+    1.0 / (1.0 + seconds) + if pinned { 0.5 } else { 0.0 }
 }
 
 fn update_tray_tooltip(app: &tauri::AppHandle, count: usize) {
@@ -78,12 +91,14 @@ pub fn run() {
     let mut engine = SearchEngine::new();
     let mut depq: Depq<(String, i64)> = Depq::new();
     let mut group_manager = ClipGroupManager::new();
+    let mut skip_list = SkipList::new();
     for c in &initial_clips {
         engine.index_clip(c.id, &c.content);
         if !c.pinned {
             depq.push((c.created_at.clone(), c.id));
         }
         group_manager.add_clip(c.id);
+        skip_list.insert(clip_score(&c.created_at, c.pinned), c.id);
     }
     for i in 0..initial_clips.len() {
         for j in (i + 1)..initial_clips.len() {
@@ -102,6 +117,8 @@ pub fn run() {
     let expiry_depq = Arc::new(Mutex::new(depq));
     let clip_history = Arc::new(Mutex::new(VersionHistory::new(initial_version)));
     let group_manager = Arc::new(Mutex::new(group_manager));
+    let clip_index = Arc::new(Mutex::new(skip_list));
+    let classifier = Arc::new(ClipClassifier::new());
     let clip_count = Arc::new(AtomicUsize::new(initial_clips.len()));
 
     tauri::Builder::default()
@@ -112,6 +129,8 @@ pub fn run() {
             expiry_depq: expiry_depq.clone(),
             clip_history: clip_history.clone(),
             group_manager: group_manager.clone(),
+            clip_index: clip_index.clone(),
+            classifier: classifier.clone(),
             clip_count: clip_count.clone(),
         })
         .setup(move |app| {
@@ -191,6 +210,8 @@ pub fn run() {
             let depq_writer = expiry_depq.clone();
             let history_writer = clip_history.clone();
             let group_writer = group_manager.clone();
+            let index_writer = clip_index.clone();
+            let classifier_ref = classifier.clone();
             let count_writer = clip_count.clone();
 
             let setup_handle = app.handle().clone();
@@ -245,6 +266,20 @@ pub fn run() {
                                 .push((clip.created_at.clone(), clip.id));
 
                             {
+                                let score = clip_score(&clip.created_at, clip.pinned);
+                                index_writer.lock().await.insert(score, clip.id);
+                            }
+
+                            {
+                                let category = classifier_ref.classify(&clip.content);
+                                if !matches!(category, crate::search::classifier::ClipCategory::PlainText) {
+                                    if let Err(e) = db_writer.assign_category(clip.id, Some(category.label())).await {
+                                        tracing::warn!("Failed to auto-assign category: {e}");
+                                    }
+                                }
+                            }
+
+                            {
                                 let mut history = history_writer.lock().await;
                                 let new_version = history.current().prepend(clip.clone());
                                 history.push(new_version);
@@ -287,6 +322,7 @@ pub fn run() {
                                     } else {
                                         engine_writer.lock().await.remove_clip(evict_id, "");
                                         group_writer.lock().await.remove_clip(evict_id);
+                                        index_writer.lock().await.remove(evict_id);
                                     }
                                     depq_guard = depq_writer.lock().await;
                                 } else {
@@ -324,6 +360,8 @@ pub fn run() {
             commands::get_platform_info,
             commands::open_settings,
             commands::close_settings,
+            commands::get_ranked_clips,
+            commands::get_auto_categories,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

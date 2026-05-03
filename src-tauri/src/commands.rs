@@ -77,6 +77,7 @@ pub async fn delete_clip(
         .await
         .map_err(|e| e.to_string())?;
     state.search_engine.lock().await.remove_clip(id, "");
+    state.clip_index.lock().await.remove(id);
 
     {
         let mut history = state.clip_history.lock().await;
@@ -181,7 +182,25 @@ pub async fn search_clips(
         .collect();
 
     let engine = state.search_engine.lock().await;
-    let results = engine.search(&query, &all_clips, &recent_ids);
+    let mut results = engine.search(&query, &all_clips, &recent_ids);
+
+    let ranked_ids = state.clip_index.lock().await.iter_ranked();
+    let rank_map: std::collections::HashMap<i64, usize> = ranked_ids
+        .iter()
+        .enumerate()
+        .map(|(i, &id)| (id, i))
+        .collect();
+
+    results.sort_by(|a, b| {
+        let ra = rank_map.get(&a.clip_id).copied().unwrap_or(usize::MAX);
+        let rb = rank_map.get(&b.clip_id).copied().unwrap_or(usize::MAX);
+        let score_ord = b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal);
+        if a.score == b.score {
+            ra.cmp(&rb)
+        } else {
+            score_ord
+        }
+    });
 
     Ok(results
         .into_iter()
@@ -197,11 +216,18 @@ pub async fn search_clips(
 
 #[tauri::command]
 pub async fn toggle_pin(state: State<'_, AppState>, clip_id: i64) -> Result<bool, String> {
-    state
+    let new_pinned = state
         .db
         .toggle_pin(clip_id)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+
+    if let Ok(Some(clip)) = state.db.get_clip_by_id(clip_id).await {
+        let new_score = crate::clip_score(&clip.created_at, new_pinned);
+        state.clip_index.lock().await.update_score(clip_id, new_score);
+    }
+
+    Ok(new_pinned)
 }
 
 #[tauri::command]
@@ -420,4 +446,23 @@ pub async fn close_settings(app: AppHandle) -> Result<(), String> {
         window.hide().map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+#[tauri::command]
+pub async fn get_ranked_clips(
+    state: State<'_, AppState>,
+    limit: usize,
+) -> Result<Vec<i64>, String> {
+    Ok(state.clip_index.lock().await.top_n(limit))
+}
+
+#[tauri::command]
+pub async fn get_auto_categories() -> Result<Vec<String>, String> {
+    Ok(vec![
+        "Link".to_string(),
+        "File Path".to_string(),
+        "Code".to_string(),
+        "Email".to_string(),
+        "Color".to_string(),
+    ])
 }

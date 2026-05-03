@@ -44,16 +44,37 @@ export function Panel({ onOpenSettings }: PanelProps) {
 
   const loadClipsForTab = useCallback((tab: string) => {
     setLoading(true);
-    const loader =
-      tab === "pinned"
-        ? invoke<Clip[]>("get_pinned_clips")
-        : tab === "all" || tab === "groups"
-          ? invoke<Clip[]>("get_clips", { category: null, limit: 500 })
-          : invoke<Clip[]>("get_clips", { category: tab, limit: 500 });
-    loader
-      .then(setClips)
-      .catch((err) => console.error("Failed to fetch clips:", err))
-      .finally(() => setLoading(false));
+    if (tab === "all") {
+      Promise.all([
+        invoke<Clip[]>("get_clips", { category: null, limit: 500 }),
+        invoke<number[]>("get_ranked_clips", { limit: 500 }),
+      ])
+        .then(([fetchedClips, rankedIds]) => {
+          const byId = new Map(fetchedClips.map((c) => [c.id, c]));
+          const ordered: Clip[] = [];
+          for (const id of rankedIds) {
+            const clip = byId.get(id);
+            if (clip) ordered.push(clip);
+          }
+          for (const clip of fetchedClips) {
+            if (!ordered.some((c) => c.id === clip.id)) ordered.push(clip);
+          }
+          setClips(ordered);
+        })
+        .catch((err) => console.error("Failed to fetch clips:", err))
+        .finally(() => setLoading(false));
+    } else {
+      const loader =
+        tab === "pinned"
+          ? invoke<Clip[]>("get_pinned_clips")
+          : tab === "groups"
+            ? invoke<Clip[]>("get_clips", { category: null, limit: 500 })
+            : invoke<Clip[]>("get_clips", { category: tab, limit: 500 });
+      loader
+        .then(setClips)
+        .catch((err) => console.error("Failed to fetch clips:", err))
+        .finally(() => setLoading(false));
+    }
   }, []);
 
   useEffect(() => {
