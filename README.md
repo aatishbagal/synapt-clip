@@ -2,7 +2,7 @@
 
 A clipboard manager for Linux and Windows, built with Rust and Tauri v2. Captures clipboard history, provides search, and optionally integrates with Synapt for cross-device clipboard sharing over LAN.
 
-Currently in early development (v0.2.0).
+Currently in active development (v0.4.0).
 
 ## Prerequisites
 
@@ -81,11 +81,18 @@ See `references/docs/` for the source of truth on architecture and development g
 - Substring search using Suffix Array
 - Fuzzy search using Levenshtein distance for typo tolerance
 - Real-time results with match highlighting and ranked output
+- Ranked results ordered by a Skip List sorted index -- pinned and recent clips surface first
 
 ### Organization
 - Pin clips permanently, user-defined categories, bulk operations
 - Smart automatic grouping via Union-Find (same source app or prefix pattern)
 - Clip undo -- delete is non-destructive, reverts via persistent data structure
+- Auto-categorization -- new clips are automatically classified as Link, File Path, Code, Email, or Color using a classification Trie and keyword set
+
+### System
+- Global hotkey to show the panel from anywhere (configurable in Settings)
+- Auto-start on login via systemd user service (Linux), installed on first run
+- File-based error logging with log rotation; crash reporter writes panic context to disk
 
 ### Storage
 - SQLite with Huffman-compressed content for clips over 512 bytes
@@ -110,5 +117,7 @@ Every data structure below is implemented in the Rust backend, wired into the ac
 | Disjoint Set Union-Find | Unit 6 — Miscellaneous | Automatic clip grouping by source app and content prefix; path compression and union by rank |
 | Double Ended Priority Queue | Unit 6 — Miscellaneous | History limit enforcement; oldest clips evicted by minimum timestamp when limit exceeded |
 | Concurrent Channels (mpsc) | Unit 6 — Concurrent Data Structures | Thread-safe message passing between clipboard watcher task and storage layer |
+| Skip List | Unit 4 — Randomized Data Structures | Sorted in-memory clip index for search result ranking; probabilistic O(log n) insert and lookup |
+| Classification Trie (reuse of search Trie) | Unit 3 — Data Structures for Strings | Content-type detection for auto-categorization; same Trie struct as search, separate instance loaded with URL and file path prefixes |
 
-The Trie serves two roles in SynaptClip: it is the primary data structure for prefix search over clipboard history, and in v0.4 it is reused as a classifier to detect content type (links, file paths) for auto-categorization. This dual use demonstrates that the same data structure can solve structurally different problems — search and classification — with no additional memory cost beyond the classifier entries.
+The Trie serves two roles in SynaptClip: prefix search over clipboard history, and content-type classification for auto-categorization. The Skip List maintains a globally sorted clip index by recency score, combining time decay with a pinned-clip boost, so that the most relevant clips surface first in the panel without a full sort on every query.

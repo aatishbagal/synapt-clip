@@ -57,7 +57,7 @@ This forces the app into XWayland mode. The arboard backend works normally. No s
 | v0.1 | Foundation | Clip capture and panel UI on X11 | No |
 | v0.2 | Search | DSA search layer, Huffman compression, keyboard nav | No |
 | v0.3 | Wayland + Polish | Full platform support, persistent undo, Union-Find grouping, UI complete | Yes — professor demo |
-| v0.4 | Windows + Stability | Windows support, auto-start, reliability pass | No |
+| v0.4 | DSA Expansion + System | Skip List ranking, auto-categorization, global hotkey, auto-start, error logging, onboarding | Yes — professor demo |
 | v0.5 | Synapt Bridge | Cross-device clipboard via Synapt | No |
 | v1.0 | Release | Installable, documented, stable | Yes — public release |
 
@@ -199,29 +199,55 @@ trait ClipboardWatcher: Send {
 
 ---
 
-## v0.4 — Windows Support and Stability
+## v0.4 — DSA Expansion and System Features
 
-Target: The app works correctly on Windows 10/11. The Linux experience is hardened based on usage since v0.3.
+Target: Two new DSA contributions (Skip List, Classification Trie), system-level features (global hotkey, auto-start, error logging), and a first-run onboarding experience.
 
-### Windows
-- Windows build compiles and runs without errors
-- arboard backend works on Win32
-- Auto-start on login via Windows registry entry
-- System tray via Tauri's tray API on Windows
-- Global hotkey working on Windows
-- Installer built via Tauri's NSIS bundler
+### New data structures
 
-### Linux stability
-- Auto-start on login via systemd user service file, installed by the app on first run
-- Recovery from wl-paste subprocess crash: restart the subprocess with exponential backoff
-- Recovery from GCH file watcher losing the file: re-establish watch on file recreation
-- Handle arboard errors gracefully (e.g. clipboard locked by another process)
-- Memory usage audit: Trie and in-memory structures profiled and bounded
+| Structure | Unit | Role |
+|---|---|---|
+| Skip List | Unit 4 — Randomized Data Structures | In-memory sorted clip index; probabilistic O(log n) insert, remove, and top-N lookup; score = recency decay + pinned boost |
+| Classification Trie (reuse of search Trie) | Unit 3 — Data Structures for Strings | Content-type classifier; same Trie struct as search, separate instance loaded with URL and file path prefixes |
 
-### General
-- Comprehensive error logging via tracing crate, log file written to platform data dir
-- Crash reporter: on panic, write a crash log with context to disk
-- First-run experience: brief onboarding shown on first launch explaining core features
+### Skip List ranking
+- Index-based arena implementation (no unsafe Rust): nodes stored in `Vec<Option<SkipNode>>` with free-list recycling
+- Score function: `1.0 / (1.0 + seconds_since_created) + if pinned { 0.5 } else { 0.0 }`
+- `get_ranked_clips` Tauri command returns a ranked list of clip IDs; Panel "all" tab merges this with full clip records
+- Skip List updated on every insert, delete, and pin toggle; no periodic rebuild required
+- 10 unit tests covering insert order, removal, top-N, score update, and duplicate handling
+
+### Auto-categorization via Classification Trie
+- ClipClassifier struct wraps a Trie pre-loaded with URL and file path prefixes
+- Detection order: empty → PlainText, trie hit + string check → Link / FilePath, `@` → Email, `#hex` → Color, keyword set → Code, PlainText
+- `trie_prefix_hit` tries lengths 1–9 of the lowercased content to find stored prefixes (resolves the direction mismatch between search Trie and classifier use case)
+- Auto-categories (Link, File Path, Code, Email, Color) appear as tabs in the panel alongside user-defined categories; visually distinguished with a muted "auto" badge
+- `get_auto_categories` Tauri command returns the fixed set of auto-category names
+- 14 unit tests covering all detection branches
+
+### Global hotkey
+- `tauri-plugin-global-shortcut` registered on launch; default `Super+Shift+V`
+- Configurable in Settings; saved to persistent settings store; takes effect immediately without restart
+- On trigger: centers and focuses the main window
+- Wayland note shown in Settings when GCH or Wayland session is detected
+
+### Auto-start (Linux)
+- Writes a systemd user service file to `~/.config/systemd/user/synaptclip.service` on first run
+- `ExecStart` set to the current executable path at install time
+- `is_service_installed` check prevents duplicate installs
+- `get_autostart_status` and `install_autostart` Tauri commands expose status and manual install to Settings UI
+
+### Error logging and crash reporting
+- `tracing-subscriber` writes structured logs to `~/.local/share/synaptclip/synaptclip.log` and stderr simultaneously via a custom `DualWriter` struct
+- Log rotation: file over 5 MB renamed to `synaptclip.log.old` on startup
+- Panic hook captures panic message + backtrace and appends a crash report block to the log file
+- Log file path exposed in Settings diagnostics section via `get_log_path` command
+
+### First-run onboarding
+- On first launch, an onboarding overlay is shown before the main panel
+- Covers three key features: clipboard capture, search and organization, hotkey access
+- Clicking "Get started" sets `first_run = "done"` in settings and dismisses the overlay
+- Onboarding is skipped on subsequent launches and never shown on the settings window
 
 ---
 
