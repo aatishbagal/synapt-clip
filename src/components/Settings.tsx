@@ -60,6 +60,7 @@ export function Settings({ onClose }: SettingsProps) {
   const hotkeyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [autostart, setAutostart] = useState<AutostartStatus | null>(null);
   const [autostartHint, setAutostartHint] = useState<string | null>(null);
+  const [logPath, setLogPath] = useState<string>("");
 
   useEffect(() => {
     invoke<Record<string, string>>("get_settings")
@@ -79,6 +80,10 @@ export function Settings({ onClose }: SettingsProps) {
     invoke<AutostartStatus>("get_autostart_status")
       .then(setAutostart)
       .catch((err) => console.error("Failed to load autostart status:", err));
+
+    invoke<string>("get_log_path")
+      .then(setLogPath)
+      .catch(() => {});
   }, []);
 
   const persist = useCallback((key: string, value: string) => {
@@ -491,6 +496,29 @@ export function Settings({ onClose }: SettingsProps) {
         </Section>
 
         <Section title="Wayland">{renderBackendStatus()}</Section>
+
+        <Section title="Diagnostics">
+          <div className="flex flex-col gap-2">
+            <Row label="Log file">
+              <input
+                type="text"
+                value={logPath}
+                readOnly
+                className="rounded px-2 py-1 text-xs"
+                style={{
+                  backgroundColor: "var(--bg)",
+                  color: "var(--muted)",
+                  border: "1px solid var(--border)",
+                  width: "260px",
+                  fontFamily: "monospace",
+                }}
+              />
+            </Row>
+            <p className="text-xs" style={{ color: "var(--muted)" }}>
+              Share this file when reporting issues.
+            </p>
+          </div>
+        </Section>
       </div>
     </div>
   );

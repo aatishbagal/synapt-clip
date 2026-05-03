@@ -486,6 +486,13 @@ pub async fn get_ranked_clips(
 }
 
 #[tauri::command]
+pub async fn get_log_path() -> Result<String, String> {
+    Ok(crate::log_file_path()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "unavailable".to_string()))
+}
+
+#[tauri::command]
 pub async fn get_auto_categories() -> Result<Vec<String>, String> {
     Ok(vec![
         "Link".to_string(),

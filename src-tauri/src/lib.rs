@@ -60,14 +60,96 @@ fn set_tray_warning(app: &tauri::AppHandle) {
     }
 }
 
-pub fn run() {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-        )
-        .init();
+pub fn log_file_path() -> Option<std::path::PathBuf> {
+    dirs::data_dir().map(|d| d.join("synaptclip").join("synaptclip.log"))
+}
 
-    tracing::info!("Starting SynaptClip v0.3.0");
+struct DualWriter {
+    file: Option<Arc<std::sync::Mutex<std::fs::File>>>,
+}
+
+impl std::io::Write for DualWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if let Some(ref f) = self.file {
+            if let Ok(mut guard) = f.lock() {
+                let _ = guard.write_all(buf);
+            }
+        }
+        std::io::stderr().write(buf)
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        if let Some(ref f) = self.file {
+            if let Ok(mut guard) = f.lock() {
+                let _ = guard.flush();
+            }
+        }
+        std::io::stderr().flush()
+    }
+}
+
+impl<'a> tracing_subscriber::fmt::writer::MakeWriter<'a> for DualWriter {
+    type Writer = DualWriter;
+    fn make_writer(&'a self) -> Self::Writer {
+        DualWriter {
+            file: self.file.as_ref().map(Arc::clone),
+        }
+    }
+}
+
+fn setup_logging() {
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+    let file_arc: Option<Arc<std::sync::Mutex<std::fs::File>>> =
+        log_file_path().and_then(|path| {
+            if let Some(parent) = path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            if let Ok(meta) = std::fs::metadata(&path) {
+                if meta.len() > 5 * 1024 * 1024 {
+                    let _ = std::fs::rename(&path, path.with_extension("log.old"));
+                }
+            }
+            match std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)
+            {
+                Ok(file) => Some(Arc::new(std::sync::Mutex::new(file))),
+                Err(e) => {
+                    eprintln!("Failed to open log file: {e}");
+                    None
+                }
+            }
+        });
+
+    let writer = DualWriter { file: file_arc };
+
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_writer(writer)
+        .with_ansi(false)
+        .init();
+}
+
+pub fn run() {
+    std::panic::set_hook(Box::new(|info| {
+        let crash_path = dirs::data_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join("synaptclip")
+            .join("crash.log");
+        let content = format!(
+            "SynaptClip crash\nVersion: {}\nTime: {:?}\nInfo: {}\n",
+            env!("CARGO_PKG_VERSION"),
+            std::time::SystemTime::now(),
+            info
+        );
+        let _ = std::fs::write(&crash_path, &content);
+        eprintln!("Crash log written to {:?}", crash_path);
+    }));
+
+    setup_logging();
+
+    tracing::info!(version = env!("CARGO_PKG_VERSION"), "SynaptClip starting");
 
     let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
 
@@ -93,14 +175,8 @@ pub fn run() {
         let first_run = db.get_setting("first_run").await.unwrap_or(None).is_none();
         if first_run {
             match autostart::install_service() {
-                Ok(true) => {
-                    tracing::info!("Installed systemd service file");
-                    let _ = db.set_setting("first_run", "done").await;
-                }
-                Ok(false) => {
-                    tracing::info!("Systemd service file already exists");
-                    let _ = db.set_setting("first_run", "done").await;
-                }
+                Ok(true) => tracing::info!("Installed systemd service file"),
+                Ok(false) => tracing::info!("Systemd service file already exists"),
                 Err(e) => tracing::warn!("Failed to install service file: {e}"),
             }
         }
@@ -395,6 +471,7 @@ pub fn run() {
             commands::get_auto_categories,
             commands::get_autostart_status,
             commands::install_autostart,
+            commands::get_log_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

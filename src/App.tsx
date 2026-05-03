@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Panel } from "./components/Panel";
 import { Settings } from "./components/Settings";
+import { Onboarding } from "./components/Onboarding";
 
 type Theme = "dark" | "light" | "system";
 
@@ -18,6 +19,7 @@ function applyTheme(theme: Theme) {
 
 export function App() {
   const [visible, setVisible] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const isSettings = window.location.hash === "#settings";
 
   useEffect(() => {
@@ -29,6 +31,9 @@ export function App() {
     invoke<Record<string, string>>("get_settings")
       .then((s) => {
         applyTheme(((s.theme as Theme) ?? "dark"));
+        if (!isSettings && (!s.first_run || s.first_run !== "done")) {
+          setShowOnboarding(true);
+        }
       })
       .catch(() => applyTheme("dark"));
 
@@ -38,7 +43,7 @@ export function App() {
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, []);
+  }, [isSettings]);
 
   const handleOpenSettings = () => {
     invoke("open_settings").catch((err) =>
@@ -59,6 +64,8 @@ export function App() {
     >
       {isSettings ? (
         <Settings onClose={handleCloseSettings} />
+      ) : showOnboarding ? (
+        <Onboarding onDone={() => setShowOnboarding(false)} />
       ) : (
         <Panel onOpenSettings={handleOpenSettings} />
       )}
