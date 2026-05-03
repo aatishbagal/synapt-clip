@@ -12,7 +12,7 @@ import { ContextMenu } from "./ContextMenu";
 import type { Clip } from "../types/clip";
 import type { SearchResult } from "../types/search";
 
-const VERSION = "v0.3.0";
+const VERSION = "v0.4.0";
 
 interface PanelProps {
   onOpenSettings?: () => void;
