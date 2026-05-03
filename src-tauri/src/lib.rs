@@ -1,6 +1,8 @@
+mod autostart;
 mod clipboard;
 mod commands;
 mod dsa;
+mod hotkey;
 mod platform;
 mod search;
 mod storage;
@@ -69,7 +71,7 @@ pub fn run() {
 
     let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
 
-    let (db, initial_clips) = rt.block_on(async {
+    let (db, initial_clips, startup_hotkey, is_first_run) = rt.block_on(async {
         let app_data_dir = dirs::data_dir()
             .expect("failed to resolve app data directory")
             .join("dev.synapt.clip");
@@ -83,7 +85,26 @@ pub fn run() {
                 tracing::warn!("Failed to load initial clips: {e}");
                 Vec::new()
             });
-        (db, clips)
+        let hotkey_val = db
+            .get_setting("hotkey")
+            .await
+            .unwrap_or(None)
+            .unwrap_or_else(|| "Super+Shift+V".to_string());
+        let first_run = db.get_setting("first_run").await.unwrap_or(None).is_none();
+        if first_run {
+            match autostart::install_service() {
+                Ok(true) => {
+                    tracing::info!("Installed systemd service file");
+                    let _ = db.set_setting("first_run", "done").await;
+                }
+                Ok(false) => {
+                    tracing::info!("Systemd service file already exists");
+                    let _ = db.set_setting("first_run", "done").await;
+                }
+                Err(e) => tracing::warn!("Failed to install service file: {e}"),
+            }
+        }
+        (db, clips, hotkey_val, first_run)
     });
 
     let db = Arc::new(db);
@@ -123,6 +144,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(AppState {
             db: db.clone(),
             search_engine: search_engine.clone(),
@@ -196,6 +218,15 @@ pub fn run() {
                         let _ = s.hide();
                     }
                 });
+            }
+
+            match hotkey::register_hotkey(app.handle(), &startup_hotkey) {
+                Ok(()) => tracing::info!("Hotkey registered: {startup_hotkey}"),
+                Err(e) => tracing::warn!("Hotkey registration failed: {e}"),
+            }
+
+            if is_first_run {
+                let _ = app.handle().emit("autostart:service_installed", ());
             }
 
             let backend = platform::detect_backend();
@@ -362,6 +393,8 @@ pub fn run() {
             commands::close_settings,
             commands::get_ranked_clips,
             commands::get_auto_categories,
+            commands::get_autostart_status,
+            commands::install_autostart,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

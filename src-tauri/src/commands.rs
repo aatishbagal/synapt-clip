@@ -382,6 +382,16 @@ pub async fn set_setting(
         "theme" => {
             let _ = app.emit("settings:theme_changed", &value);
         }
+        "hotkey" => {
+            match crate::hotkey::register_hotkey(&app, &value) {
+                Ok(()) => {
+                    let _ = app.emit("settings:hotkey_changed", &value);
+                }
+                Err(e) => {
+                    return Err(e);
+                }
+            }
+        }
         _ => {}
     }
     Ok(())
@@ -446,6 +456,25 @@ pub async fn close_settings(app: AppHandle) -> Result<(), String> {
         window.hide().map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AutostartStatus {
+    pub service_installed: bool,
+    pub enabled_hint: String,
+}
+
+#[tauri::command]
+pub async fn get_autostart_status() -> Result<AutostartStatus, String> {
+    Ok(AutostartStatus {
+        service_installed: crate::autostart::is_service_installed(),
+        enabled_hint: "Run: systemctl --user enable synaptclip && systemctl --user start synaptclip".to_string(),
+    })
+}
+
+#[tauri::command]
+pub async fn install_autostart() -> Result<bool, String> {
+    crate::autostart::install_service()
 }
 
 #[tauri::command]

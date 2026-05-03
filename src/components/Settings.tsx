@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { X } from "lucide-react";
 
@@ -10,6 +10,11 @@ interface PlatformInfo {
   backend: string;
   session_type: string;
   gch_installed: boolean;
+}
+
+interface AutostartStatus {
+  service_installed: boolean;
+  enabled_hint: string;
 }
 
 type Theme = "dark" | "light" | "system";
@@ -51,6 +56,10 @@ export function Settings({ onClose }: SettingsProps) {
   const [excludedInput, setExcludedInput] = useState("");
   const [platform, setPlatform] = useState<PlatformInfo | null>(null);
   const [recordingHotkey, setRecordingHotkey] = useState(false);
+  const [hotkeyFeedback, setHotkeyFeedback] = useState<{ msg: string; ok: boolean } | null>(null);
+  const hotkeyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [autostart, setAutostart] = useState<AutostartStatus | null>(null);
+  const [autostartHint, setAutostartHint] = useState<string | null>(null);
 
   useEffect(() => {
     invoke<Record<string, string>>("get_settings")
@@ -66,6 +75,10 @@ export function Settings({ onClose }: SettingsProps) {
     invoke<PlatformInfo>("get_platform_info")
       .then(setPlatform)
       .catch((err) => console.error("Failed to load platform info:", err));
+
+    invoke<AutostartStatus>("get_autostart_status")
+      .then(setAutostart)
+      .catch((err) => console.error("Failed to load autostart status:", err));
   }, []);
 
   const persist = useCallback((key: string, value: string) => {
@@ -104,6 +117,12 @@ export function Settings({ onClose }: SettingsProps) {
     persist("excluded_apps", JSON.stringify(next));
   };
 
+  const showHotkeyFeedback = (msg: string, ok: boolean) => {
+    setHotkeyFeedback({ msg, ok });
+    if (hotkeyFeedbackTimer.current) clearTimeout(hotkeyFeedbackTimer.current);
+    hotkeyFeedbackTimer.current = setTimeout(() => setHotkeyFeedback(null), 2000);
+  };
+
   const handleHotkeyKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!recordingHotkey) return;
     e.preventDefault();
@@ -122,9 +141,27 @@ export function Settings({ onClose }: SettingsProps) {
       parts.push(key.length === 1 ? key.toUpperCase() : key);
       const combo = parts.join("+");
       setHotkey(combo);
-      persist("hotkey", combo);
       setRecordingHotkey(false);
+      invoke("set_setting", { key: "hotkey", value: combo })
+        .then(() => showHotkeyFeedback("Hotkey updated", true))
+        .catch(() =>
+          showHotkeyFeedback(
+            "Could not register hotkey — try a different combination",
+            false,
+          ),
+        );
     }
+  };
+
+  const handleInstallAutostart = () => {
+    invoke<boolean>("install_autostart")
+      .then((installed) => {
+        if (installed || true) {
+          invoke<AutostartStatus>("get_autostart_status").then(setAutostart);
+          setAutostartHint(autostart?.enabled_hint ?? null);
+        }
+      })
+      .catch((err) => console.error("Failed to install autostart:", err));
   };
 
   const renderBackendStatus = () => {
@@ -372,9 +409,85 @@ export function Settings({ onClose }: SettingsProps) {
               }}
             />
           </Row>
-          <p className="text-xs" style={{ color: "var(--muted)" }}>
-            Hotkey will activate in v0.4 — value is saved now.
-          </p>
+          {hotkeyFeedback && (
+            <p
+              className="text-xs"
+              style={{
+                color: hotkeyFeedback.ok ? "var(--success)" : "var(--danger)",
+              }}
+            >
+              {hotkeyFeedback.msg}
+            </p>
+          )}
+          {(platform?.backend === "gch" ||
+            platform?.session_type === "wayland") && (
+            <p className="text-xs" style={{ color: "var(--muted)" }}>
+              Global hotkeys may not work on GNOME Wayland. Use the tray icon
+              to open the panel if the hotkey is unresponsive.
+            </p>
+          )}
+        </Section>
+
+        <Section title="System">
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-medium" style={{ color: "var(--text)" }}>
+              Auto-start on login
+            </p>
+            {autostart === null ? (
+              <p className="text-xs" style={{ color: "var(--muted)" }}>
+                Loading...
+              </p>
+            ) : autostart.service_installed ? (
+              <>
+                <p className="text-xs" style={{ color: "var(--muted)" }}>
+                  Service file installed.
+                </p>
+                <code
+                  className="text-xs px-2 py-1 rounded"
+                  style={{
+                    backgroundColor: "var(--bg)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text)",
+                  }}
+                >
+                  To enable: systemctl --user enable synaptclip
+                </code>
+                <p className="text-xs" style={{ color: "var(--muted)" }}>
+                  Disabling: systemctl --user disable synaptclip
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-xs" style={{ color: "var(--muted)" }}>
+                  Auto-start not set up.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleInstallAutostart}
+                  className="self-start rounded px-2 py-1 text-xs"
+                  style={{
+                    backgroundColor: "var(--surface-hover)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text)",
+                  }}
+                >
+                  Install service file
+                </button>
+                {autostartHint && (
+                  <code
+                    className="text-xs px-2 py-1 rounded"
+                    style={{
+                      backgroundColor: "var(--bg)",
+                      border: "1px solid var(--border)",
+                      color: "var(--text)",
+                    }}
+                  >
+                    {autostartHint}
+                  </code>
+                )}
+              </>
+            )}
+          </div>
         </Section>
 
         <Section title="Wayland">{renderBackendStatus()}</Section>
