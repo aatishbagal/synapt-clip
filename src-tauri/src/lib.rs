@@ -5,16 +5,13 @@ mod dsa;
 mod hotkey;
 mod platform;
 mod search;
+mod share;
 mod storage;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use tauri::{
-    menu::{Menu, MenuItem},
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Emitter, Manager,
-};
+use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
 use tracing_subscriber::EnvFilter;
 
@@ -232,50 +229,9 @@ pub fn run() {
             clip_count: clip_count.clone(),
         })
         .setup(move |app| {
-            let show = MenuItem::with_id(app, "show", "Show SynaptClip", true, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show, &quit])?;
-
-            TrayIconBuilder::with_id(TRAY_ID)
-                .tooltip(format!(
-                    "SynaptClip — {} clips",
-                    clip_count.load(Ordering::Relaxed)
-                ))
-                .menu(&menu)
-                .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.center();
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
-                    }
-                    "quit" => {
-                        app.exit(0);
-                    }
-                    _ => {}
-                })
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event
-                    {
-                        let app = tray.app_handle();
-                        if let Some(window) = app.get_webview_window("main") {
-                            let visible = window.is_visible().unwrap_or(false);
-                            if visible {
-                                let _ = window.hide();
-                            } else {
-                                let _ = window.center();
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            }
-                        }
-                    }
-                })
-                .build(app)?;
+            // Shared system tray: become the host (owns the single icon) or attach
+            // as a client to an already-running Synapt/SynaptClip host.
+            share::start(app);
 
             if let Some(window) = app.get_webview_window("main") {
                 let w = window.clone();
