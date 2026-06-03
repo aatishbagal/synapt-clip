@@ -4216,6 +4216,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
+ "synapt-core",
  "tauri",
  "tauri-build",
  "tauri-plugin-global-shortcut",
@@ -4224,6 +4225,17 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "synapt-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "uuid",
 ]
 
 [[package]]

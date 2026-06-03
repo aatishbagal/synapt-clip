@@ -1,6 +1,13 @@
 # SynaptClip
 
-A clipboard manager for Linux and Windows, built with Rust and Tauri v2. Captures clipboard history, provides search, and optionally integrates with Synapt for cross-device clipboard sharing over LAN.
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/images/logo/png/SynaptV2_White_PNG_512sq.png">
+    <img src="./assets/images/logo/png/SynaptV2_Black_PNG_512sq.png" alt="SynaptClip" width="120">
+  </picture>
+</p>
+
+A clipboard manager for Linux and Windows, built with Rust and Tauri v2. Captures clipboard history, provides search, and optionally integrates with [Synapt](https://github.com/aatishbagal/synapt) for cross-device clipboard sharing over LAN.
 
 Currently in active development (v0.4.0).
 
@@ -77,17 +84,15 @@ See `references/docs/` for the source of truth on architecture and development g
 - Duplicate detection, configurable history limit, source app tracking
 
 ### Search
-- Prefix search using a compressed Trie (Patricia Trie)
-- Substring search using Suffix Array
-- Fuzzy search using Levenshtein distance for typo tolerance
+- Prefix, substring, and fuzzy (typo-tolerant) search
 - Real-time results with match highlighting and ranked output
-- Ranked results ordered by a Skip List sorted index -- pinned and recent clips surface first
+- Pinned and recent clips surface first
 
 ### Organization
 - Pin clips permanently, user-defined categories, bulk operations
-- Smart automatic grouping via Union-Find (same source app or prefix pattern)
-- Clip undo -- delete is non-destructive, reverts via persistent data structure
-- Auto-categorization -- new clips are automatically classified as Link, File Path, Code, Email, or Color using a classification Trie and keyword set
+- Smart automatic grouping by source app or content prefix
+- Non-destructive delete with undo
+- Auto-categorization -- new clips are classified as Link, File Path, Code, Email, or Color
 
 ### System
 - Global hotkey to show the panel from anywhere (configurable in Settings)
@@ -95,29 +100,14 @@ See `references/docs/` for the source of truth on architecture and development g
 - File-based error logging with log rotation; crash reporter writes panic context to disk
 
 ### Storage
-- SQLite with Huffman-compressed content for clips over 512 bytes
-- Auto-expiry scheduler using a Double Ended Priority Queue
+- SQLite with compressed content for clips over 512 bytes
+- Configurable auto-expiry
 
 ### Synapt Integration (optional)
-- Send and receive clipboard content across LAN devices when Synapt is installed
+- Send and receive clipboard content across LAN devices when [Synapt](https://github.com/aatishbagal/synapt) is installed
 - No dependency on Synapt -- integration activates at runtime if detected
 
-## Data Structures and Algorithms
+## Related
 
-Every data structure below is implemented in the Rust backend, wired into the active code path, and covered by unit tests.
-
-| Concept | Syllabus Unit | Used For |
-|---|---|---|
-| Compressed Trie (Patricia Trie) | Unit 3 — Data Structures for Strings | Prefix search on clip content; reused for auto-category classification in v0.4 |
-| Suffix Array | Unit 3 — Data Structures for Strings | Substring search across all clip content; second search tier after prefix |
-| Levenshtein Distance | Unit 3 — Dictionaries Allowing Errors | Fuzzy search fallback when prefix and substring search return no results |
-| Huffman Tree | Unit 1 — Advanced Trees | Clip content compression before SQLite storage for clips over 512 bytes |
-| Bloom Filter | Unit 6 — Succinct Representations | Duplicate detection before SQLite insert; bit vector with FNV1a and DJB2 hash functions |
-| Persistent Linked List | Unit 6 — Persistent Data Structures | Non-destructive clip delete; undo restores previous version without mutating history |
-| Disjoint Set Union-Find | Unit 6 — Miscellaneous | Automatic clip grouping by source app and content prefix; path compression and union by rank |
-| Double Ended Priority Queue | Unit 6 — Miscellaneous | History limit enforcement; oldest clips evicted by minimum timestamp when limit exceeded |
-| Concurrent Channels (mpsc) | Unit 6 — Concurrent Data Structures | Thread-safe message passing between clipboard watcher task and storage layer |
-| Skip List | Unit 4 — Randomized Data Structures | Sorted in-memory clip index for search result ranking; probabilistic O(log n) insert and lookup |
-| Classification Trie (reuse of search Trie) | Unit 3 — Data Structures for Strings | Content-type detection for auto-categorization; same Trie struct as search, separate instance loaded with URL and file path prefixes |
-
-The Trie serves two roles in SynaptClip: prefix search over clipboard history, and content-type classification for auto-categorization. The Skip List maintains a globally sorted clip index by recency score, combining time decay with a pinned-clip boost, so that the most relevant clips surface first in the panel without a full sort on every query.
+- [Synapt](https://github.com/aatishbagal/synapt) -- Spotlight-style launcher and LAN file utility
+- [synapt-core](https://github.com/aatishbagal/synapt-core) -- shared type library used across the Synapt apps
