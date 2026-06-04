@@ -453,23 +453,24 @@ pub async fn close_settings(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct AutostartStatus {
-    pub service_installed: bool,
-    pub enabled_hint: String,
+/// Enable or disable launching SynaptClip automatically on login.
+#[tauri::command]
+pub async fn set_autostart(enabled: bool, _app: AppHandle) -> Result<(), String> {
+    let exe_path = std::env::current_exe()
+        .map_err(|e| e.to_string())?
+        .to_string_lossy()
+        .to_string();
+    if enabled {
+        crate::platform::autostart::enable(&exe_path).map_err(|e| e.to_string())
+    } else {
+        crate::platform::autostart::disable().map_err(|e| e.to_string())
+    }
 }
 
+/// Report whether SynaptClip is configured to launch on login.
 #[tauri::command]
-pub async fn get_autostart_status() -> Result<AutostartStatus, String> {
-    Ok(AutostartStatus {
-        service_installed: crate::autostart::is_service_installed(),
-        enabled_hint: "Run: systemctl --user enable synaptclip && systemctl --user start synaptclip".to_string(),
-    })
-}
-
-#[tauri::command]
-pub async fn install_autostart() -> Result<bool, String> {
-    crate::autostart::install_service()
+pub async fn get_autostart() -> Result<bool, String> {
+    crate::platform::autostart::is_enabled().map_err(|e| e.to_string())
 }
 
 #[tauri::command]

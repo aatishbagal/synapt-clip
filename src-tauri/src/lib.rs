@@ -1,4 +1,3 @@
-mod autostart;
 mod clipboard;
 mod commands;
 mod dsa;
@@ -150,7 +149,7 @@ pub fn run() {
 
     let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
 
-    let (db, initial_clips, startup_hotkey, is_first_run) = rt.block_on(async {
+    let (db, initial_clips, startup_hotkey) = rt.block_on(async {
         let app_data_dir = dirs::data_dir()
             .expect("failed to resolve app data directory")
             .join("dev.synapt.clip");
@@ -169,15 +168,7 @@ pub fn run() {
             .await
             .unwrap_or(None)
             .unwrap_or_else(|| "Super+Shift+V".to_string());
-        let first_run = db.get_setting("first_run").await.unwrap_or(None).is_none();
-        if first_run {
-            match autostart::install_service() {
-                Ok(true) => tracing::info!("Installed systemd service file"),
-                Ok(false) => tracing::info!("Systemd service file already exists"),
-                Err(e) => tracing::warn!("Failed to install service file: {e}"),
-            }
-        }
-        (db, clips, hotkey_val, first_run)
+        (db, clips, hotkey_val)
     });
 
     let db = Arc::new(db);
@@ -255,10 +246,6 @@ pub fn run() {
             match hotkey::register_hotkey(app.handle(), &startup_hotkey) {
                 Ok(()) => tracing::info!("Hotkey registered: {startup_hotkey}"),
                 Err(e) => tracing::warn!("Hotkey registration failed: {e}"),
-            }
-
-            if is_first_run {
-                let _ = app.handle().emit("autostart:service_installed", ());
             }
 
             let backend = platform::detect_backend();
@@ -462,8 +449,8 @@ pub fn run() {
             commands::close_settings,
             commands::get_ranked_clips,
             commands::get_auto_categories,
-            commands::get_autostart_status,
-            commands::install_autostart,
+            commands::set_autostart,
+            commands::get_autostart,
             commands::get_log_path,
         ])
         .run(tauri::generate_context!())

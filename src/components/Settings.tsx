@@ -13,11 +13,6 @@ interface PlatformInfo {
   gch_installed: boolean;
 }
 
-interface AutostartStatus {
-  service_installed: boolean;
-  enabled_hint: string;
-}
-
 interface BackendStatusInfo {
   backend: string;
   session: string;
@@ -65,8 +60,7 @@ export function Settings({ onClose }: SettingsProps) {
   const [recordingHotkey, setRecordingHotkey] = useState(false);
   const [hotkeyFeedback, setHotkeyFeedback] = useState<{ msg: string; ok: boolean } | null>(null);
   const hotkeyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [autostart, setAutostart] = useState<AutostartStatus | null>(null);
-  const [autostartHint, setAutostartHint] = useState<string | null>(null);
+  const [autostart, setAutostart] = useState(false);
   const [backendStatus, setBackendStatus] = useState<BackendStatusInfo | null>(null);
   const [logPath, setLogPath] = useState<string>("");
 
@@ -85,9 +79,9 @@ export function Settings({ onClose }: SettingsProps) {
       .then(setPlatform)
       .catch((err) => console.error("Failed to load platform info:", err));
 
-    invoke<AutostartStatus>("get_autostart_status")
+    invoke<boolean>("get_autostart")
       .then(setAutostart)
-      .catch((err) => console.error("Failed to load autostart status:", err));
+      .catch(() => setAutostart(false));
 
     invoke<BackendStatusInfo>("get_backend_status")
       .then(setBackendStatus)
@@ -170,15 +164,12 @@ export function Settings({ onClose }: SettingsProps) {
     }
   };
 
-  const handleInstallAutostart = () => {
-    invoke<boolean>("install_autostart")
-      .then((installed) => {
-        if (installed || true) {
-          invoke<AutostartStatus>("get_autostart_status").then(setAutostart);
-          setAutostartHint(autostart?.enabled_hint ?? null);
-        }
-      })
-      .catch((err) => console.error("Failed to install autostart:", err));
+  const handleToggleAutostart = (checked: boolean) => {
+    setAutostart(checked);
+    invoke("set_autostart", { enabled: checked }).catch((err) => {
+      console.error("Failed to set autostart:", err);
+      setAutostart(!checked);
+    });
   };
 
   const renderBackendStatus = () => {
@@ -424,65 +415,16 @@ export function Settings({ onClose }: SettingsProps) {
         </Section>
 
         <Section title="System">
-          <div className="flex flex-col gap-2">
-            <p className="text-xs font-medium" style={{ color: "var(--text)" }}>
-              Auto-start on login
-            </p>
-            {autostart === null ? (
-              <p className="text-xs" style={{ color: "var(--muted)" }}>
-                Loading...
-              </p>
-            ) : autostart.service_installed ? (
-              <>
-                <p className="text-xs" style={{ color: "var(--muted)" }}>
-                  Service file installed.
-                </p>
-                <code
-                  className="text-xs px-2 py-1 rounded"
-                  style={{
-                    backgroundColor: "var(--bg)",
-                    border: "1px solid var(--border)",
-                    color: "var(--text)",
-                  }}
-                >
-                  To enable: systemctl --user enable synaptclip
-                </code>
-                <p className="text-xs" style={{ color: "var(--muted)" }}>
-                  Disabling: systemctl --user disable synaptclip
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="text-xs" style={{ color: "var(--muted)" }}>
-                  Auto-start not set up.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleInstallAutostart}
-                  className="self-start rounded px-2 py-1 text-xs"
-                  style={{
-                    backgroundColor: "var(--surface-hover)",
-                    border: "1px solid var(--border)",
-                    color: "var(--text)",
-                  }}
-                >
-                  Install service file
-                </button>
-                {autostartHint && (
-                  <code
-                    className="text-xs px-2 py-1 rounded"
-                    style={{
-                      backgroundColor: "var(--bg)",
-                      border: "1px solid var(--border)",
-                      color: "var(--text)",
-                    }}
-                  >
-                    {autostartHint}
-                  </code>
-                )}
-              </>
-            )}
-          </div>
+          <Row label="Start on login">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autostart}
+                onChange={(e) => handleToggleAutostart(e.target.checked)}
+                style={{ accentColor: "var(--accent)" }}
+              />
+            </label>
+          </Row>
         </Section>
 
         <Section title="Wayland">
