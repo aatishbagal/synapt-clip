@@ -157,7 +157,7 @@ pub fn encode(text: &str) -> Option<HuffmanEncoded> {
         *freqs.entry(c).or_insert(0) += 1;
     }
     let mut freq_table: Vec<(char, usize)> = freqs.into_iter().collect();
-    freq_table.sort_by(|a, b| a.0.cmp(&b.0));
+    freq_table.sort_by_key(|a| a.0);
 
     let mut bit_len = 0usize;
     let mut bits: Vec<u8> = Vec::new();

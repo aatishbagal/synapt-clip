@@ -410,7 +410,10 @@ pub async fn get_platform_info() -> Result<PlatformInfo, String> {
     let backend_str = match backend {
         ClipboardBackend::Arboard => "arboard",
         ClipboardBackend::WlrDataControl => "wlr",
-        ClipboardBackend::GchFile => "gch",
+        ClipboardBackend::GchFile
+        | ClipboardBackend::GchNotEnabled
+        | ClipboardBackend::GchNotInstalled => "gch",
+        ClipboardBackend::Unsupported => "unsupported",
     }
     .to_string();
 
@@ -420,15 +423,7 @@ pub async fn get_platform_info() -> Result<PlatformInfo, String> {
         std::env::var("XDG_SESSION_TYPE").unwrap_or_else(|_| "x11".to_string())
     };
 
-    let gch_installed = dirs::data_dir()
-        .map(|d| {
-            d.join("gnome-shell")
-                .join("extensions")
-                .join("clipboard-history@alexsaveau.dev")
-                .join("database.log")
-                .exists()
-        })
-        .unwrap_or(false);
+    let gch_installed = crate::clipboard::gch::detect_gch().installed;
 
     Ok(PlatformInfo {
         backend: backend_str,
@@ -458,23 +453,24 @@ pub async fn close_settings(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct AutostartStatus {
-    pub service_installed: bool,
-    pub enabled_hint: String,
+/// Enable or disable launching SynaptClip automatically on login.
+#[tauri::command]
+pub async fn set_autostart(enabled: bool, _app: AppHandle) -> Result<(), String> {
+    let exe_path = std::env::current_exe()
+        .map_err(|e| e.to_string())?
+        .to_string_lossy()
+        .to_string();
+    if enabled {
+        crate::platform::autostart::enable(&exe_path).map_err(|e| e.to_string())
+    } else {
+        crate::platform::autostart::disable().map_err(|e| e.to_string())
+    }
 }
 
+/// Report whether SynaptClip is configured to launch on login.
 #[tauri::command]
-pub async fn get_autostart_status() -> Result<AutostartStatus, String> {
-    Ok(AutostartStatus {
-        service_installed: crate::autostart::is_service_installed(),
-        enabled_hint: "Run: systemctl --user enable synaptclip && systemctl --user start synaptclip".to_string(),
-    })
-}
-
-#[tauri::command]
-pub async fn install_autostart() -> Result<bool, String> {
-    crate::autostart::install_service()
+pub async fn get_autostart() -> Result<bool, String> {
+    crate::platform::autostart::is_enabled().map_err(|e| e.to_string())
 }
 
 #[tauri::command]

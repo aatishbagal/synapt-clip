@@ -1,4 +1,3 @@
-mod autostart;
 mod clipboard;
 mod commands;
 mod dsa;
@@ -150,7 +149,7 @@ pub fn run() {
 
     let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
 
-    let (db, initial_clips, startup_hotkey, is_first_run) = rt.block_on(async {
+    let (db, initial_clips, startup_hotkey) = rt.block_on(async {
         let app_data_dir = dirs::data_dir()
             .expect("failed to resolve app data directory")
             .join("dev.synapt.clip");
@@ -169,15 +168,7 @@ pub fn run() {
             .await
             .unwrap_or(None)
             .unwrap_or_else(|| "Super+Shift+V".to_string());
-        let first_run = db.get_setting("first_run").await.unwrap_or(None).is_none();
-        if first_run {
-            match autostart::install_service() {
-                Ok(true) => tracing::info!("Installed systemd service file"),
-                Ok(false) => tracing::info!("Systemd service file already exists"),
-                Err(e) => tracing::warn!("Failed to install service file: {e}"),
-            }
-        }
-        (db, clips, hotkey_val, first_run)
+        (db, clips, hotkey_val)
     });
 
     let db = Arc::new(db);
@@ -257,12 +248,43 @@ pub fn run() {
                 Err(e) => tracing::warn!("Hotkey registration failed: {e}"),
             }
 
-            if is_first_run {
-                let _ = app.handle().emit("autostart:service_installed", ());
-            }
-
             let backend = platform::detect_backend();
             tracing::info!("Detected clipboard backend: {:?}", backend);
+
+            // Surface setup-required backends to the frontend up front.
+            match backend {
+                platform::ClipboardBackend::GchNotEnabled => {
+                    let _ = app.handle().emit(
+                        "backend-status",
+                        serde_json::json!({
+                            "status": "gch_not_enabled",
+                            "message": "Enable Clipboard History in GNOME Extensions",
+                        }),
+                    );
+                    set_tray_warning(app.handle());
+                }
+                platform::ClipboardBackend::GchNotInstalled => {
+                    let _ = app.handle().emit(
+                        "backend-status",
+                        serde_json::json!({
+                            "status": "gch_not_installed",
+                            "message": "Install the Clipboard History GNOME extension to use SynaptClip on GNOME Wayland",
+                        }),
+                    );
+                    set_tray_warning(app.handle());
+                }
+                platform::ClipboardBackend::Unsupported => {
+                    let _ = app.handle().emit(
+                        "backend-status",
+                        serde_json::json!({
+                            "status": "unsupported",
+                            "message": "No supported clipboard backend detected for this session",
+                        }),
+                    );
+                    set_tray_warning(app.handle());
+                }
+                _ => {}
+            }
 
             let watcher = clipboard::create_watcher(&backend);
             let (tx, mut rx) = tokio::sync::mpsc::channel::<clipboard::NewClip>(32);
@@ -421,12 +443,14 @@ pub fn run() {
             commands::get_settings,
             commands::set_setting,
             commands::get_platform_info,
+            clipboard::gch::get_gch_status,
+            platform::detect::get_backend_status,
             commands::open_settings,
             commands::close_settings,
             commands::get_ranked_clips,
             commands::get_auto_categories,
-            commands::get_autostart_status,
-            commands::install_autostart,
+            commands::set_autostart,
+            commands::get_autostart,
             commands::get_log_path,
         ])
         .run(tauri::generate_context!())
