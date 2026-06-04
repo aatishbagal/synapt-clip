@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { X } from "lucide-react";
+import { Select } from "./Select";
 
 interface SettingsProps {
   onClose: () => void;
@@ -277,40 +278,18 @@ export function Settings({ onClose }: SettingsProps) {
       <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-5">
         <Section title="History">
           <Row label="History limit">
-            <select
+            <Select
               value={historyLimit}
-              onChange={(e) => handleHistoryLimit(e.target.value)}
-              className="rounded px-2 py-1 text-xs"
-              style={{
-                backgroundColor: "var(--surface)",
-                color: "var(--text)",
-                border: "1px solid var(--border)",
-              }}
-            >
-              {HISTORY_LIMITS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+              options={HISTORY_LIMITS}
+              onChange={handleHistoryLimit}
+            />
           </Row>
           <Row label="Auto-expiry">
-            <select
+            <Select
               value={expiryDays}
-              onChange={(e) => handleExpiryDays(e.target.value)}
-              className="rounded px-2 py-1 text-xs"
-              style={{
-                backgroundColor: "var(--surface)",
-                color: "var(--text)",
-                border: "1px solid var(--border)",
-              }}
-            >
-              {EXPIRY_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+              options={EXPIRY_OPTIONS}
+              onChange={handleExpiryDays}
+            />
           </Row>
         </Section>
 
