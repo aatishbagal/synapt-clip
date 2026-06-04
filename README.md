@@ -9,7 +9,7 @@
 
 A clipboard manager for Linux and Windows, built with Rust and Tauri v2. Captures clipboard history, provides search, and optionally integrates with [Synapt](https://github.com/aatishbagal/synapt) for cross-device clipboard sharing over LAN.
 
-Currently in active development (v0.4.0).
+Currently in active development (v0.4.1).
 
 ## Prerequisites
 

@@ -52,7 +52,9 @@ jobs:
           cache-dependency-path: synapt-clip/package-lock.json
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        # Pinned for reproducible clippy: floating @stable lets new clippy
+        # releases introduce lints that break -D warnings with no code change.
+        uses: dtolnay/rust-toolchain@1.96.0
         with:
           components: clippy
 
