@@ -264,6 +264,41 @@ pub fn run() {
             let backend = platform::detect_backend();
             tracing::info!("Detected clipboard backend: {:?}", backend);
 
+            // Surface setup-required backends to the frontend up front.
+            match backend {
+                platform::ClipboardBackend::GchNotEnabled => {
+                    let _ = app.handle().emit(
+                        "backend-status",
+                        serde_json::json!({
+                            "status": "gch_not_enabled",
+                            "message": "Enable Clipboard History in GNOME Extensions",
+                        }),
+                    );
+                    set_tray_warning(app.handle());
+                }
+                platform::ClipboardBackend::GchNotInstalled => {
+                    let _ = app.handle().emit(
+                        "backend-status",
+                        serde_json::json!({
+                            "status": "gch_not_installed",
+                            "message": "Install the Clipboard History GNOME extension to use SynaptClip on GNOME Wayland",
+                        }),
+                    );
+                    set_tray_warning(app.handle());
+                }
+                platform::ClipboardBackend::Unsupported => {
+                    let _ = app.handle().emit(
+                        "backend-status",
+                        serde_json::json!({
+                            "status": "unsupported",
+                            "message": "No supported clipboard backend detected for this session",
+                        }),
+                    );
+                    set_tray_warning(app.handle());
+                }
+                _ => {}
+            }
+
             let watcher = clipboard::create_watcher(&backend);
             let (tx, mut rx) = tokio::sync::mpsc::channel::<clipboard::NewClip>(32);
 
@@ -421,6 +456,8 @@ pub fn run() {
             commands::get_settings,
             commands::set_setting,
             commands::get_platform_info,
+            clipboard::gch::get_gch_status,
+            platform::detect::get_backend_status,
             commands::open_settings,
             commands::close_settings,
             commands::get_ranked_clips,

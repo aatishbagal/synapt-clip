@@ -410,7 +410,10 @@ pub async fn get_platform_info() -> Result<PlatformInfo, String> {
     let backend_str = match backend {
         ClipboardBackend::Arboard => "arboard",
         ClipboardBackend::WlrDataControl => "wlr",
-        ClipboardBackend::GchFile => "gch",
+        ClipboardBackend::GchFile
+        | ClipboardBackend::GchNotEnabled
+        | ClipboardBackend::GchNotInstalled => "gch",
+        ClipboardBackend::Unsupported => "unsupported",
     }
     .to_string();
 
@@ -420,15 +423,7 @@ pub async fn get_platform_info() -> Result<PlatformInfo, String> {
         std::env::var("XDG_SESSION_TYPE").unwrap_or_else(|_| "x11".to_string())
     };
 
-    let gch_installed = dirs::data_dir()
-        .map(|d| {
-            d.join("gnome-shell")
-                .join("extensions")
-                .join("clipboard-history@alexsaveau.dev")
-                .join("database.log")
-                .exists()
-        })
-        .unwrap_or(false);
+    let gch_installed = crate::clipboard::gch::detect_gch().installed;
 
     Ok(PlatformInfo {
         backend: backend_str,
