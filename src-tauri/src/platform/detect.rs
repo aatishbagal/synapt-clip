@@ -49,39 +49,48 @@ pub fn detect_backend() -> ClipboardBackend {
         let is_x11 = session_type == "x11" || (x11_display.is_some() && !is_wayland);
 
         if is_wayland {
-            // wlroots compositors expose the wlr-data-control protocol; GNOME
-            // Mutter does not, so this probe fails on GNOME and we fall through.
-            if probe_wlr_data_control(wayland_display.as_deref()) {
+            let desktop = std::env::var("XDG_CURRENT_DESKTOP")
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            let is_gnome = desktop.contains("gnome") || desktop.contains("unity");
+
+            // wlroots compositors (Sway, Hyprland) expose wlr/ext-data-control.
+            // GNOME Mutter is handled via the Clipboard History extension: recent
+            // Mutter answers wl-paste, so probing it would wrongly pick the wlr
+            // backend on GNOME — hence GNOME is routed to GCH explicitly.
+            if !is_gnome && probe_wlr_data_control(wayland_display.as_deref()) {
                 tracing::info!("platform: Wayland wlroots detected — using wl-paste backend");
                 return ClipboardBackend::WlrDataControl;
             }
 
-            // GNOME Wayland: rely on the Clipboard History extension.
-            let gch = crate::clipboard::gch::detect_gch();
-            if gch.installed && gch.enabled && gch.db_path.is_some() {
-                tracing::info!("platform: GNOME Wayland with GCH extension — using GCH file watcher");
-                return ClipboardBackend::GchFile;
-            }
-            if gch.installed && gch.enabled {
-                // Installed and enabled but no database yet; the watcher polls
-                // for it, so still use the file backend.
-                tracing::info!("platform: GNOME Wayland, GCH enabled, awaiting database");
-                return ClipboardBackend::GchFile;
-            }
-            if gch.installed && !gch.enabled {
-                tracing::warn!("platform: GCH extension installed but not enabled");
-                return ClipboardBackend::GchNotEnabled;
-            }
-            if !gch.installed {
-                // Fall back to XWayland arboard if an X11 display is available.
+            if is_gnome {
+                // GNOME Wayland: rely on the Clipboard History extension.
+                let gch = crate::clipboard::gch::detect_gch();
+                if gch.installed && gch.enabled {
+                    // Use the file backend when enabled; the watcher polls for
+                    // the database if it has not been written yet.
+                    tracing::info!("platform: GNOME Wayland with GCH extension — using GCH file watcher");
+                    return ClipboardBackend::GchFile;
+                }
+                if gch.installed && !gch.enabled {
+                    tracing::warn!("platform: GCH extension installed but not enabled");
+                    return ClipboardBackend::GchNotEnabled;
+                }
+                // Not installed: fall back to XWayland arboard if available.
                 if x11_display.is_some() {
                     tracing::warn!(
-                        "platform: Wayland, GCH not installed — falling back to XWayland arboard"
+                        "platform: GNOME Wayland, GCH not installed — falling back to XWayland arboard"
                     );
                     return ClipboardBackend::Arboard;
                 }
                 tracing::warn!("platform: GNOME Wayland, GCH extension not found");
                 return ClipboardBackend::GchNotInstalled;
+            }
+
+            // Non-GNOME Wayland without wlr support: try XWayland arboard.
+            if x11_display.is_some() {
+                tracing::warn!("platform: Wayland with no wlr support — falling back to XWayland arboard");
+                return ClipboardBackend::Arboard;
             }
 
             tracing::error!("platform: Wayland with no supported clipboard backend");

@@ -1,9 +1,9 @@
 name: CI
 
-# Runs on every push and on PRs into main. Compiles, lints, tests, and builds
-# the frontend as a fast correctness gate (debug build only — no bundling).
+# Runs only on pull requests into main, as the merge gate. Compiles, lints,
+# tests, and builds the frontend (debug build only — no bundling). Direct pushes
+# to dev do not trigger any build; releases are cut from main by release.yml.
 on:
-  push:
   pull_request:
     branches: [main]
 

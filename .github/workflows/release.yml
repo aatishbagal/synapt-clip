@@ -1,17 +1,45 @@
 name: Release
 
-# Fires when a version tag is pushed (e.g. v0.4.1). Pushing the tag is the
-# deliberate "make a release" signal.
+# Fires when dev is merged into main (a merge is a push to main).
+# A release is only cut when the version in src-tauri/tauri.conf.json does not
+# yet have a matching tag, so bumping the version in your PR is the deliberate
+# "make a release" signal. Merges that do not bump the version are no-ops.
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
 
 permissions:
   contents: write
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      exists: ${{ steps.tag.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version from tauri.conf.json
+        id: version
+        run: echo "version=$(jq -r .version src-tauri/tauri.conf.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether this version is already released
+        id: tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "v${{ steps.version.outputs.version }}" -R "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "v${{ steps.version.outputs.version }} already released - skipping."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "v${{ steps.version.outputs.version }} is new - will build a release."
+          fi
+
   release:
+    needs: check
+    if: needs.check.outputs.exists == 'false'
     strategy:
       fail-fast: false
       matrix:
@@ -74,16 +102,17 @@ jobs:
         run: npm ci
 
       # tauri-action builds the bundles for the current platform (Linux: .deb +
-      # .AppImage, Windows: .msi + .exe NSIS installer) and uploads them as
-      # assets on the release for the pushed tag, creating it if needed.
+      # .AppImage, Windows: .msi + .exe NSIS installer), creates the
+      # v__VERSION__ tag and release if needed, and uploads the bundles as
+      # assets. __VERSION__ is substituted from src-tauri/tauri.conf.json.
       - name: Build and publish release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: synapt-clip
-          tagName: ${{ github.ref_name }}
-          releaseName: SynaptClip ${{ github.ref_name }}
-          releaseBody: Download the installer for your platform below.
+          tagName: v__VERSION__
+          releaseName: SynaptClip v__VERSION__
+          releaseBody: Built from main. Download the installer for your platform below.
           releaseDraft: false
           prerelease: false
