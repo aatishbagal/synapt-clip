@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=SynaptClip
+Comment=Clipboard manager with cross-device sync
+Exec=synaptclip
+Icon=io.aatish.synaptclip
+Type=Application
+Categories=Utility;
+StartupNotify=true
+X-GNOME-UsesNotifications=true
