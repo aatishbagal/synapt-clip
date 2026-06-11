@@ -167,6 +167,24 @@ export function ClipCard({
           )}
         </div>
         <div className="flex items-center gap-2">
+          {clip.source_app === "synapt" && (
+            <span
+              className="flex items-center"
+              style={{ color: "var(--muted)", fontSize: 11 }}
+            >
+              <span
+                className="inline-block"
+                style={{
+                  width: 20,
+                  height: 3,
+                  backgroundColor: "var(--accent-soft)",
+                  borderRadius: 2,
+                  marginRight: 5,
+                }}
+              />
+              From {clip.sender_name ?? "unknown device"}
+            </span>
+          )}
           {clip.category && (
             <span
               className="text-[10px] px-1.5 py-0.5 rounded"

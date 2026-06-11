@@ -31,6 +31,8 @@ pub struct Clip {
     pub original_size: i64,
     pub compressed_size: i64,
     pub category: Option<String>,
+    pub sender_name: Option<String>,
+    pub sender_peer_id: Option<String>,
 }
 
 #[derive(Debug, Clone, sqlx::FromRow)]
@@ -46,10 +48,13 @@ struct ClipRow {
     original_size: i64,
     compressed_size: i64,
     category: Option<String>,
+    sender_name: Option<String>,
+    sender_peer_id: Option<String>,
 }
 
 const CLIP_COLUMNS: &str = "id, content, content_type, created_at, source_app, pinned, \
-    deleted_at, was_compressed, original_size, compressed_size, category";
+    deleted_at, was_compressed, original_size, compressed_size, category, \
+    sender_name, sender_peer_id";
 
 impl ClipRow {
     fn decode(self) -> Result<Clip, DbError> {
@@ -66,6 +71,8 @@ impl ClipRow {
             original_size: self.original_size,
             compressed_size: self.compressed_size,
             category: self.category,
+            sender_name: self.sender_name,
+            sender_peer_id: self.sender_peer_id,
         })
     }
 }
@@ -127,6 +134,8 @@ impl Db {
             original_size: row.original_size,
             compressed_size: row.compressed_size,
             category: row.category,
+            sender_name: row.sender_name,
+            sender_peer_id: row.sender_peer_id,
         })
     }
 

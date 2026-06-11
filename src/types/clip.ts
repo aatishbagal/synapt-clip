@@ -10,4 +10,6 @@ export interface Clip {
   original_size: number;
   compressed_size: number;
   category: string | null;
+  sender_name?: string | null;
+  sender_peer_id?: string | null;
 }

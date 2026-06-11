@@ -9,8 +9,10 @@ import { ClipCard } from "./ClipCard";
 import { CategoryTabs } from "./CategoryTabs";
 import { GroupsView } from "./GroupsView";
 import { ContextMenu } from "./ContextMenu";
+import { DevicesSection } from "./DevicesSection";
 import type { Clip } from "../types/clip";
 import type { SearchResult } from "../types/search";
+import type { BridgeState } from "../types/synapt";
 
 const VERSION = "v0.4.1";
 
@@ -34,6 +36,11 @@ export function Panel({ onOpenSettings }: PanelProps) {
   const [setupWarning, setSetupWarning] = useState<string | null>(null);
   const [undoStack, setUndoStack] = useState(0);
   const [contextMenu, setContextMenu] = useState<ContextState>(null);
+  const [bridgeState, setBridgeState] = useState<BridgeState>({
+    active: false,
+    peers: [],
+    api_version: null,
+  });
   const rootRef = useRef<HTMLDivElement>(null);
 
   const reloadCategories = useCallback(() => {
@@ -79,6 +86,26 @@ export function Panel({ onOpenSettings }: PanelProps) {
 
   useEffect(() => {
     loadClipsForTab(activeTab);
+  }, [activeTab, loadClipsForTab]);
+
+  useEffect(() => {
+    invoke<BridgeState>("get_bridge_state")
+      .then(setBridgeState)
+      .catch(() =>
+        setBridgeState({ active: false, peers: [], api_version: null }),
+      );
+
+    const unlistenBridge = listen<BridgeState>("bridge-state-changed", (e) =>
+      setBridgeState(e.payload),
+    );
+    const unlistenReceived = listen("clip-received", () =>
+      loadClipsForTab(activeTab),
+    );
+
+    return () => {
+      unlistenBridge.then((fn) => fn());
+      unlistenReceived.then((fn) => fn());
+    };
   }, [activeTab, loadClipsForTab]);
 
   useEffect(() => {
@@ -410,6 +437,15 @@ export function Panel({ onOpenSettings }: PanelProps) {
         />
       )}
 
+      {bridgeState.active && (
+        <DevicesSection
+          peers={bridgeState.peers}
+          onSendLatest={async (peerId) => {
+            await invoke("send_latest_clip_to_peer", { peerId });
+          }}
+        />
+      )}
+
       {isSearching ? (
         searchResults.length === 0 ? (
           <div className="flex-1 flex items-center justify-center">
@@ -463,6 +499,13 @@ export function Panel({ onOpenSettings }: PanelProps) {
           onPin={() => handleTogglePin(contextMenu.clip)}
           onCategoryAssign={(cat) => handleAssignCategory(contextMenu.clip, cat)}
           onDelete={() => handleDelete(contextMenu.clip.id)}
+          peers={bridgeState.active ? bridgeState.peers : []}
+          onSendToDevice={async (peerId) => {
+            await invoke("send_clip_to_peer", {
+              peerId,
+              content: contextMenu.clip.content,
+            });
+          }}
         />
       )}
     </div>

@@ -7,6 +7,7 @@ mod search;
 mod share;
 mod storage;
 mod synapt;
+mod tray;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};

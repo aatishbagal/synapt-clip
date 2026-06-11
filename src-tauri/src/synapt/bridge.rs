@@ -97,6 +97,8 @@ pub async fn start(state: SharedBridgeState, app: tauri::AppHandle) {
                 tracing::info!("bridge: Synapt detected on port 57321");
                 emit_state(&app, &new_state);
             }
+            // Keep the tray tooltip in sync with the live peer count.
+            crate::tray::update_tray_tooltip(&app, true, new_state.peers.len());
             was_active = true;
         } else {
             if was_active {
@@ -104,6 +106,7 @@ pub async fn start(state: SharedBridgeState, app: tauri::AppHandle) {
                 let inactive = BridgeState::inactive();
                 store_state(&state, inactive.clone());
                 emit_state(&app, &inactive);
+                crate::tray::update_tray_tooltip(&app, false, 0);
             }
             was_active = false;
         }
