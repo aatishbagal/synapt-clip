@@ -488,6 +488,110 @@ pub async fn get_log_path() -> Result<String, String> {
         .unwrap_or_else(|| "unavailable".to_string()))
 }
 
+/// Result of queuing a clip transfer through Synapt.
+#[derive(Debug, serde::Serialize)]
+pub struct SendResult {
+    pub transfer_id: String,
+    pub status: String,
+}
+
+/// Verify the bridge is active and the target peer is currently online.
+/// Pure over the bridge snapshot so it can be unit-tested without a live app.
+fn ensure_peer_sendable(
+    bridge: &crate::synapt::bridge::BridgeState,
+    peer_id: &str,
+) -> Result<(), String> {
+    if !bridge.active {
+        return Err("Synapt is not running".to_string());
+    }
+    if !bridge.peers.iter().any(|p| p.id == peer_id && p.online) {
+        return Err("Peer not found or is offline".to_string());
+    }
+    Ok(())
+}
+
+/// POST a clip to Synapt's transfer API and map the response to a result.
+async fn post_clip_to_synapt(peer_id: &str, content: &str) -> Result<SendResult, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(2))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let body = serde_json::json!({
+        "peer_id": peer_id,
+        "content": content,
+        "content_type": "text",
+    });
+
+    let resp = client
+        .post("http://127.0.0.1:57321/v1/clips/send")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Request failed: {e}"))?;
+
+    match resp.status().as_u16() {
+        202 => {
+            #[derive(serde::Deserialize)]
+            struct Resp {
+                transfer_id: String,
+                status: String,
+            }
+            let r: Resp = resp
+                .json()
+                .await
+                .map_err(|e| format!("Response parse error: {e}"))?;
+            Ok(SendResult {
+                transfer_id: r.transfer_id,
+                status: r.status,
+            })
+        }
+        404 => Err("Peer is no longer available".to_string()),
+        422 => Err("Invalid request".to_string()),
+        503 => Err("Synapt transfer service is not available".to_string()),
+        s => Err(format!("Unexpected status: {s}")),
+    }
+}
+
+/// Send the given clip content to a peer device via Synapt's P2P transfer layer.
+#[tauri::command]
+pub async fn send_clip_to_peer(
+    peer_id: String,
+    content: String,
+    state: State<'_, AppState>,
+) -> Result<SendResult, String> {
+    {
+        let guard = state
+            .bridge_state
+            .read()
+            .map_err(|_| "Bridge state unavailable".to_string())?;
+        ensure_peer_sendable(&guard, &peer_id)?;
+    }
+    post_clip_to_synapt(&peer_id, &content).await
+}
+
+/// Send the most recent locally captured clip to a peer device.
+#[tauri::command]
+pub async fn send_latest_clip_to_peer(
+    peer_id: String,
+    state: State<'_, AppState>,
+) -> Result<SendResult, String> {
+    {
+        let guard = state
+            .bridge_state
+            .read()
+            .map_err(|_| "Bridge state unavailable".to_string())?;
+        ensure_peer_sendable(&guard, &peer_id)?;
+    }
+    let content = state
+        .db
+        .get_latest_clip_content()
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "No clips to send".to_string())?;
+    post_clip_to_synapt(&peer_id, &content).await
+}
+
 /// Return the current Synapt bridge state for the frontend.
 #[tauri::command]
 pub fn get_bridge_state(
@@ -530,4 +634,73 @@ pub async fn get_auto_categories() -> Result<Vec<String>, String> {
         "Email".to_string(),
         "Color".to_string(),
     ])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::synapt::bridge::{BridgeState, SynaptPeer};
+
+    fn online_peer(id: &str) -> SynaptPeer {
+        SynaptPeer {
+            id: id.to_string(),
+            name: "device".to_string(),
+            ip: "192.168.1.10".to_string(),
+            port: 54321,
+            online: true,
+            last_seen: "2025-03-14T10:22:00Z".to_string(),
+        }
+    }
+
+    #[test]
+    fn send_rejected_when_bridge_inactive() {
+        let bridge = BridgeState::inactive();
+        let err = ensure_peer_sendable(&bridge, "peer-1").expect_err("should reject");
+        assert_eq!(err, "Synapt is not running");
+    }
+
+    #[test]
+    fn send_rejected_when_peer_not_present() {
+        let bridge = BridgeState {
+            active: true,
+            peers: vec![online_peer("peer-1")],
+            api_version: Some("1".to_string()),
+        };
+        let err = ensure_peer_sendable(&bridge, "peer-unknown").expect_err("should reject");
+        assert_eq!(err, "Peer not found or is offline");
+    }
+
+    #[test]
+    fn send_rejected_when_peer_offline() {
+        let mut peer = online_peer("peer-1");
+        peer.online = false;
+        let bridge = BridgeState {
+            active: true,
+            peers: vec![peer],
+            api_version: Some("1".to_string()),
+        };
+        let err = ensure_peer_sendable(&bridge, "peer-1").expect_err("should reject");
+        assert_eq!(err, "Peer not found or is offline");
+    }
+
+    #[test]
+    fn send_allowed_for_online_peer() {
+        let bridge = BridgeState {
+            active: true,
+            peers: vec![online_peer("peer-1")],
+            api_version: Some("1".to_string()),
+        };
+        assert!(ensure_peer_sendable(&bridge, "peer-1").is_ok());
+    }
+
+    #[test]
+    fn send_result_serialises() {
+        let r = SendResult {
+            transfer_id: "transfer-9".to_string(),
+            status: "queued".to_string(),
+        };
+        let json = serde_json::to_value(&r).expect("serialise");
+        assert_eq!(json["transfer_id"], "transfer-9");
+        assert_eq!(json["status"], "queued");
+    }
 }

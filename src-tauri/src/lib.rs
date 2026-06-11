@@ -472,6 +472,8 @@ pub fn run() {
             commands::get_log_path,
             commands::get_bridge_state,
             commands::refresh_bridge_peers,
+            commands::send_clip_to_peer,
+            commands::send_latest_clip_to_peer,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

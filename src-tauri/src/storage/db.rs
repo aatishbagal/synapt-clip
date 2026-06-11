@@ -397,6 +397,27 @@ impl Db {
         Ok(rows.into_iter().collect())
     }
 
+    /// Return the content of the most recent locally captured clip, decoding it
+    /// if compressed. Clips received from remote peers (`source_app = 'synapt'`)
+    /// are excluded so only locally captured content is sent out.
+    pub async fn get_latest_clip_content(&self) -> Result<Option<String>, DbError> {
+        let row: Option<(String, bool)> = sqlx::query_as(
+            "SELECT content, was_compressed FROM clips \
+             WHERE deleted_at IS NULL AND (source_app IS NULL OR source_app != 'synapt') \
+             ORDER BY created_at DESC LIMIT 1",
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        match row {
+            Some((raw, was_compressed)) => {
+                let decoded = huffman::maybe_decode(raw.as_bytes(), was_compressed)?;
+                Ok(Some(decoded))
+            }
+            None => Ok(None),
+        }
+    }
+
     /// Insert a clip received from a remote Synapt peer. Stored as a normal text
     /// clip tagged with `source_app = 'synapt'` and the sender's identity.
     /// Returns the new clip's rowid.
