@@ -2,6 +2,7 @@
 //! fetches the current peer list, and maintains shared bridge state that Tauri
 //! commands and the frontend can read.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
@@ -67,8 +68,13 @@ fn store_state(state: &SharedBridgeState, value: BridgeState) {
 ///
 /// Polls `/v1/health` every 10 seconds. On success it fetches `/v1/peers` and
 /// updates state; on failure it marks the bridge inactive. A `bridge-state-changed`
-/// Tauri event is emitted on every transition between active and inactive.
-pub async fn start(state: SharedBridgeState, app: tauri::AppHandle) {
+/// Tauri event is emitted on every transition between active and inactive, and the
+/// tray tooltip is refreshed (with the current clip count) on every poll.
+pub async fn start(
+    state: SharedBridgeState,
+    clip_count: Arc<AtomicUsize>,
+    app: tauri::AppHandle,
+) {
     let client = match Client::builder().timeout(HTTP_TIMEOUT).build() {
         Ok(c) => c,
         Err(e) => {
@@ -97,8 +103,13 @@ pub async fn start(state: SharedBridgeState, app: tauri::AppHandle) {
                 tracing::info!("bridge: Synapt detected on port 57321");
                 emit_state(&app, &new_state);
             }
-            // Keep the tray tooltip in sync with the live peer count.
-            crate::tray::update_tray_tooltip(&app, true, new_state.peers.len());
+            // Keep the tray tooltip in sync with the live peer count and clip count.
+            crate::tray::update_tray_tooltip(
+                &app,
+                clip_count.load(Ordering::Relaxed),
+                true,
+                new_state.peers.len(),
+            );
             was_active = true;
         } else {
             if was_active {
@@ -106,7 +117,12 @@ pub async fn start(state: SharedBridgeState, app: tauri::AppHandle) {
                 let inactive = BridgeState::inactive();
                 store_state(&state, inactive.clone());
                 emit_state(&app, &inactive);
-                crate::tray::update_tray_tooltip(&app, false, 0);
+                crate::tray::update_tray_tooltip(
+                    &app,
+                    clip_count.load(Ordering::Relaxed),
+                    false,
+                    0,
+                );
             }
             was_active = false;
         }

@@ -47,10 +47,13 @@ pub fn clip_score(created_at: &str, pinned: bool) -> f64 {
     1.0 / (1.0 + seconds) + if pinned { 0.5 } else { 0.0 }
 }
 
-fn update_tray_tooltip(app: &tauri::AppHandle, count: usize) {
-    if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        let _ = tray.set_tooltip(Some(format!("SynaptClip — {count} clips")));
-    }
+/// Read the current bridge active/peer-count snapshot, tolerating lock poison.
+fn bridge_snapshot(state: &crate::synapt::bridge::SharedBridgeState) -> (bool, usize) {
+    let read = match state.read() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    (read.active, read.peers.len())
 }
 
 fn set_tray_warning(app: &tauri::AppHandle) {
@@ -233,6 +236,7 @@ pub fn run() {
             // Background Synapt bridge: detect Synapt and track its peer list.
             tauri::async_runtime::spawn(crate::synapt::bridge::start(
                 Arc::clone(&bridge_state),
+                clip_count.clone(),
                 app.handle().clone(),
             ));
 
@@ -317,6 +321,7 @@ pub fn run() {
             let index_writer = clip_index.clone();
             let classifier_ref = classifier.clone();
             let count_writer = clip_count.clone();
+            let bridge_reader = bridge_state.clone();
 
             let setup_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -415,7 +420,13 @@ pub fn run() {
                             }
 
                             let new_count = count_writer.fetch_add(1, Ordering::Relaxed) + 1;
-                            update_tray_tooltip(&app_handle, new_count);
+                            let (bridge_active, peer_count) = bridge_snapshot(&bridge_reader);
+                            crate::tray::update_tray_tooltip(
+                                &app_handle,
+                                new_count,
+                                bridge_active,
+                                peer_count,
+                            );
 
                             let mut depq_guard = depq_writer.lock().await;
                             while depq_guard.len() > HISTORY_LIMIT {
