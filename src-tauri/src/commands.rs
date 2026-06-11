@@ -488,6 +488,39 @@ pub async fn get_log_path() -> Result<String, String> {
         .unwrap_or_else(|| "unavailable".to_string()))
 }
 
+/// Return the current Synapt bridge state for the frontend.
+#[tauri::command]
+pub fn get_bridge_state(
+    state: State<'_, AppState>,
+) -> crate::synapt::bridge::BridgeState {
+    match state.bridge_state.read() {
+        Ok(guard) => guard.clone(),
+        Err(poisoned) => poisoned.into_inner().clone(),
+    }
+}
+
+/// Force an immediate peer fetch from Synapt, outside the polling loop.
+#[tauri::command]
+pub async fn refresh_bridge_peers(
+    _state: State<'_, AppState>,
+) -> Result<Vec<crate::synapt::bridge::SynaptPeer>, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(2))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let resp = client
+        .get("http://127.0.0.1:57321/v1/peers")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    #[derive(serde::Deserialize)]
+    struct R {
+        peers: Vec<crate::synapt::bridge::SynaptPeer>,
+    }
+    let body: R = resp.json().await.map_err(|e| e.to_string())?;
+    Ok(body.peers)
+}
+
 #[tauri::command]
 pub async fn get_auto_categories() -> Result<Vec<String>, String> {
     Ok(vec![

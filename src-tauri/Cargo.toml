@@ -9,6 +9,8 @@ synapt-core = { path = "../../synapt-core" }
 tauri-plugin-shell = "2"
 tauri-plugin-global-shortcut = "2"
 tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.13", features = ["json"] }
+axum = "0.8"
 sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio", "migrate"] }
 arboard = "3"
 serde = { version = "1", features = ["derive"] }

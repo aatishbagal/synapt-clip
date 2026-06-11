@@ -6,9 +6,10 @@ mod platform;
 mod search;
 mod share;
 mod storage;
+mod synapt;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
@@ -32,6 +33,7 @@ pub struct AppState {
     pub clip_index: Arc<Mutex<SkipList>>,
     pub classifier: Arc<ClipClassifier>,
     pub clip_count: Arc<AtomicUsize>,
+    pub bridge_state: crate::synapt::bridge::SharedBridgeState,
 }
 
 pub fn clip_score(created_at: &str, pinned: bool) -> f64 {
@@ -205,6 +207,8 @@ pub fn run() {
     let clip_index = Arc::new(Mutex::new(skip_list));
     let classifier = Arc::new(ClipClassifier::new());
     let clip_count = Arc::new(AtomicUsize::new(initial_clips.len()));
+    let bridge_state: crate::synapt::bridge::SharedBridgeState =
+        Arc::new(RwLock::new(crate::synapt::bridge::BridgeState::inactive()));
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -218,11 +222,18 @@ pub fn run() {
             clip_index: clip_index.clone(),
             classifier: classifier.clone(),
             clip_count: clip_count.clone(),
+            bridge_state: bridge_state.clone(),
         })
         .setup(move |app| {
             // Shared system tray: become the host (owns the single icon) or attach
             // as a client to an already-running Synapt/SynaptClip host.
             share::start(app);
+
+            // Background Synapt bridge: detect Synapt and track its peer list.
+            tauri::async_runtime::spawn(crate::synapt::bridge::start(
+                Arc::clone(&bridge_state),
+                app.handle().clone(),
+            ));
 
             if let Some(window) = app.get_webview_window("main") {
                 let w = window.clone();
@@ -452,6 +463,8 @@ pub fn run() {
             commands::set_autostart,
             commands::get_autostart,
             commands::get_log_path,
+            commands::get_bridge_state,
+            commands::refresh_bridge_peers,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
