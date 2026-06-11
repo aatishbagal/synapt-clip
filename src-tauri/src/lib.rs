@@ -235,6 +235,13 @@ pub fn run() {
                 app.handle().clone(),
             ));
 
+            // Incoming-clip listener on port 57322: always runs, even when Synapt
+            // is not detected, since Synapt may start later.
+            tauri::async_runtime::spawn(crate::synapt::listener::start(
+                db.clone(),
+                app.handle().clone(),
+            ));
+
             if let Some(window) = app.get_webview_window("main") {
                 let w = window.clone();
                 window.on_window_event(move |event| {

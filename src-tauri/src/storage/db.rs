@@ -396,4 +396,27 @@ impl Db {
                 .await?;
         Ok(rows.into_iter().collect())
     }
+
+    /// Insert a clip received from a remote Synapt peer. Stored as a normal text
+    /// clip tagged with `source_app = 'synapt'` and the sender's identity.
+    /// Returns the new clip's rowid.
+    pub async fn insert_received_clip(
+        &self,
+        content: &str,
+        sender_peer_id: &str,
+        sender_name: &str,
+    ) -> Result<i64, DbError> {
+        let row: (i64,) = sqlx::query_as(
+            "INSERT INTO clips \
+                (content, content_type, created_at, source_app, sender_name, sender_peer_id) \
+             VALUES (?, 'text', datetime('now'), 'synapt', ?, ?) \
+             RETURNING id",
+        )
+        .bind(content)
+        .bind(sender_name)
+        .bind(sender_peer_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row.0)
+    }
 }
