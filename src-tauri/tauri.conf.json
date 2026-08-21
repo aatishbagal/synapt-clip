@@ -37,11 +37,7 @@
         "center": true,
         "skipTaskbar": false
       }
-    ],
-    "trayIcon": {
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": false
-    }
+    ]
   },
   "bundle": {
     "active": true,
