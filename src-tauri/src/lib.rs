@@ -229,6 +229,10 @@ pub fn run() {
             bridge_state: bridge_state.clone(),
         })
         .setup(move |app| {
+            // macOS: hide the Dock icon (tray-only app).
+            #[cfg(target_os = "macos")]
+            platform::macos::setup();
+
             // Shared system tray: become the host (owns the single icon) or attach
             // as a client to an already-running Synapt/SynaptClip host.
             share::start(app);

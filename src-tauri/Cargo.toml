@@ -24,6 +24,9 @@ dirs = "6"
 notify = "6"
 rand = "0.8"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+objc = "0.2"
+
 [target.'cfg(target_os = "windows")'.dependencies]
 winreg = "0.52"
 
