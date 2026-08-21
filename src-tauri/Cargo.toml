@@ -1,6 +1,6 @@
 [package]
 name = "synapt-clip"
-version = "0.4.1"
+version = "0.5.0"
 edition = "2021"
 
 [dependencies]
@@ -9,6 +9,8 @@ synapt-core = { path = "../../synapt-core" }
 tauri-plugin-shell = "2"
 tauri-plugin-global-shortcut = "2"
 tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.13", features = ["json"] }
+axum = "0.8"
 sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio", "migrate"] }
 arboard = "3"
 serde = { version = "1", features = ["derive"] }
@@ -21,6 +23,9 @@ async-trait = "0.1"
 dirs = "6"
 notify = "6"
 rand = "0.8"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc = "0.2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winreg = "0.52"

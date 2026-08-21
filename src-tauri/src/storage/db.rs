@@ -31,6 +31,8 @@ pub struct Clip {
     pub original_size: i64,
     pub compressed_size: i64,
     pub category: Option<String>,
+    pub sender_name: Option<String>,
+    pub sender_peer_id: Option<String>,
 }
 
 #[derive(Debug, Clone, sqlx::FromRow)]
@@ -46,10 +48,13 @@ struct ClipRow {
     original_size: i64,
     compressed_size: i64,
     category: Option<String>,
+    sender_name: Option<String>,
+    sender_peer_id: Option<String>,
 }
 
 const CLIP_COLUMNS: &str = "id, content, content_type, created_at, source_app, pinned, \
-    deleted_at, was_compressed, original_size, compressed_size, category";
+    deleted_at, was_compressed, original_size, compressed_size, category, \
+    sender_name, sender_peer_id";
 
 impl ClipRow {
     fn decode(self) -> Result<Clip, DbError> {
@@ -66,6 +71,8 @@ impl ClipRow {
             original_size: self.original_size,
             compressed_size: self.compressed_size,
             category: self.category,
+            sender_name: self.sender_name,
+            sender_peer_id: self.sender_peer_id,
         })
     }
 }
@@ -127,6 +134,8 @@ impl Db {
             original_size: row.original_size,
             compressed_size: row.compressed_size,
             category: row.category,
+            sender_name: row.sender_name,
+            sender_peer_id: row.sender_peer_id,
         })
     }
 
@@ -395,5 +404,49 @@ impl Db {
                 .fetch_all(&self.pool)
                 .await?;
         Ok(rows.into_iter().collect())
+    }
+
+    /// Return the content of the most recent locally captured clip, decoding it
+    /// if compressed. Clips received from remote peers (`source_app = 'synapt'`)
+    /// are excluded so only locally captured content is sent out.
+    pub async fn get_latest_clip_content(&self) -> Result<Option<String>, DbError> {
+        let row: Option<(String, bool)> = sqlx::query_as(
+            "SELECT content, was_compressed FROM clips \
+             WHERE deleted_at IS NULL AND (source_app IS NULL OR source_app != 'synapt') \
+             ORDER BY created_at DESC LIMIT 1",
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        match row {
+            Some((raw, was_compressed)) => {
+                let decoded = huffman::maybe_decode(raw.as_bytes(), was_compressed)?;
+                Ok(Some(decoded))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Insert a clip received from a remote Synapt peer. Stored as a normal text
+    /// clip tagged with `source_app = 'synapt'` and the sender's identity.
+    /// Returns the new clip's rowid.
+    pub async fn insert_received_clip(
+        &self,
+        content: &str,
+        sender_peer_id: &str,
+        sender_name: &str,
+    ) -> Result<i64, DbError> {
+        let row: (i64,) = sqlx::query_as(
+            "INSERT INTO clips \
+                (content, content_type, created_at, source_app, sender_name, sender_peer_id) \
+             VALUES (?, 'text', datetime('now'), 'synapt', ?, ?) \
+             RETURNING id",
+        )
+        .bind(content)
+        .bind(sender_name)
+        .bind(sender_peer_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row.0)
     }
 }

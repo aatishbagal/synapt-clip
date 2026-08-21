@@ -27,7 +27,7 @@ pub fn detect_backend() -> ClipboardBackend {
     #[cfg(target_os = "macos")]
     {
         tracing::info!("platform: macOS — using arboard backend");
-        return ClipboardBackend::Arboard;
+        ClipboardBackend::Arboard
     }
 
     #[cfg(target_os = "linux")]

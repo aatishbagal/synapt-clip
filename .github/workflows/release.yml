@@ -46,6 +46,8 @@ jobs:
         include:
           - platform: ubuntu-22.04
           - platform: windows-latest
+          - platform: macos-latest
+            args: --target universal-apple-darwin
     runs-on: ${{ matrix.platform }}
     steps:
       # SynaptClip's src-tauri/Cargo.toml references synapt-core via
@@ -92,6 +94,10 @@ jobs:
       - name: Set up Rust
         # Pinned to match CI; keeps release builds reproducible.
         uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          # macOS builds a universal binary (Apple Silicon + Intel); the other
+          # platforms don't need extra targets beyond the runner's host triple.
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Cache Rust build
         uses: swatinem/rust-cache@v2
@@ -103,15 +109,28 @@ jobs:
         run: npm ci
 
       # tauri-action builds the bundles for the current platform (Linux: .deb +
-      # .AppImage, Windows: .msi + .exe NSIS installer), creates the
-      # v__VERSION__ tag and release if needed, and uploads the bundles as
-      # assets. __VERSION__ is substituted from src-tauri/tauri.conf.json.
+      # .AppImage, Windows: .msi + .exe NSIS installer, macOS: .app + .dmg
+      # universal binary), creates the v__VERSION__ tag and release if needed,
+      # and uploads the bundles as assets. __VERSION__ is substituted from
+      # src-tauri/tauri.conf.json.
+      #
+      # macOS signing/notarization: only takes effect once the APPLE_* secrets
+      # below exist in this repo's settings. Until then tauri-action builds an
+      # unsigned .app/.dmg (same Gatekeeper "unidentified developer" prompt as
+      # a local build) rather than failing the job.
       - name: Build and publish release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           projectPath: synapt-clip
+          args: ${{ matrix.args }}
           tagName: v__VERSION__
           releaseName: SynaptClip v__VERSION__
           releaseBody: Built from main. Download the installer for your platform below.

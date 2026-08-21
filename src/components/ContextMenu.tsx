@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Clip } from "../types/clip";
+import type { SynaptPeer } from "../types/synapt";
 
 interface ContextMenuProps {
   x: number;
@@ -11,7 +12,11 @@ interface ContextMenuProps {
   onPin: () => void;
   onCategoryAssign: (category: string | null) => void;
   onDelete: () => void;
+  peers?: SynaptPeer[];
+  onSendToDevice?: (peerId: string) => Promise<void>;
 }
+
+type PeerSendStatus = "idle" | "sending" | "sent" | "failed";
 
 const MENU_BG = "var(--surface)";
 const MENU_BORDER = "var(--border)";
@@ -31,10 +36,46 @@ export function ContextMenu({
   onPin,
   onCategoryAssign,
   onDelete,
+  peers,
+  onSendToDevice,
 }: ContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [showSubmenu, setShowSubmenu] = useState(false);
   const [newCategory, setNewCategory] = useState("");
+  const [sendStatus, setSendStatus] = useState<Record<string, PeerSendStatus>>(
+    {},
+  );
+  const [sentPeers, setSentPeers] = useState<Set<string>>(new Set());
+
+  const onlinePeers = (peers ?? []).filter(
+    (p) => p.online && !sentPeers.has(p.id),
+  );
+  const showSendSection = onlinePeers.length > 0 && !!onSendToDevice;
+
+  const handleSendToDevice = async (peerId: string) => {
+    if (!onSendToDevice) return;
+    setSendStatus((prev) => ({ ...prev, [peerId]: "sending" }));
+    try {
+      await onSendToDevice(peerId);
+      setSendStatus((prev) => ({ ...prev, [peerId]: "sent" }));
+      setTimeout(() => {
+        setSentPeers((prev) => new Set(prev).add(peerId));
+      }, 1200);
+    } catch {
+      setSendStatus((prev) => ({ ...prev, [peerId]: "failed" }));
+      setTimeout(() => {
+        setSendStatus((prev) => ({ ...prev, [peerId]: "idle" }));
+      }, 3000);
+    }
+  };
+
+  const peerLabel = (peer: SynaptPeer): string => {
+    const status = sendStatus[peer.id] ?? "idle";
+    if (status === "sending") return "Sending...";
+    if (status === "sent") return "Sent";
+    if (status === "failed") return "Failed";
+    return peer.name;
+  };
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -218,6 +259,43 @@ export function ContextMenu({
       >
         <span>Delete</span>
       </button>
+
+      {showSendSection && (
+        <>
+          <div style={{ borderTop: `1px solid ${MENU_BORDER}` }} />
+          <div
+            className="px-3 py-1.5 text-[11px]"
+            style={{ color: MUTED }}
+          >
+            Send to device
+          </div>
+          {onlinePeers.map((peer) => {
+            const status = sendStatus[peer.id] ?? "idle";
+            return (
+              <button
+                key={peer.id}
+                type="button"
+                className={itemClass}
+                disabled={status === "sending"}
+                style={{ color: status === "failed" ? DANGER : TEXT }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = MENU_HOVER;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "transparent";
+                }}
+                onClick={() => {
+                  if (status === "idle") {
+                    void handleSendToDevice(peer.id);
+                  }
+                }}
+              >
+                <span>{peerLabel(peer)}</span>
+              </button>
+            );
+          })}
+        </>
+      )}
     </div>
   );
 }

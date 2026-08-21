@@ -9,7 +9,7 @@
 
 A clipboard manager for Linux and Windows, built with Rust and Tauri v2. Captures clipboard history, provides search, and optionally integrates with [Synapt](https://github.com/aatishbagal/synapt) for cross-device clipboard sharing over LAN.
 
-Currently in active development (v0.4.1).
+Currently in active development (v0.5.0).
 
 ## Prerequisites
 
@@ -106,6 +106,31 @@ See `references/docs/` for the source of truth on architecture and development g
 ### Synapt Integration (optional)
 - Send and receive clipboard content across LAN devices when [Synapt](https://github.com/aatishbagal/synapt) is installed
 - No dependency on Synapt -- integration activates at runtime if detected
+
+## Synapt Integration
+
+When Synapt is installed and running on the same machine, SynaptClip gains cross-device clipboard sync.
+
+### What it enables
+
+- A Devices section appears in the panel showing trusted peers discovered by Synapt
+- Any clip in your history can be sent to a peer device from the right-click context menu
+- The most recent clipboard entry can be sent directly from the Devices section
+- Clips received from a peer appear in your local history, marked with the sender's device name
+- The tray icon tooltip shows how many devices are connected
+
+### How it works
+
+SynaptClip polls Synapt's local API on port 57321 at startup and every 10 seconds. If Synapt is running, integration features appear. If Synapt is not running, SynaptClip works normally with no error.
+
+Sent clips are transferred using Synapt's existing encrypted peer-to-peer transfer layer. Received clips arrive via a local webhook on port 57322 and are stored in the clip history.
+
+### Setup
+
+1. Install and run Synapt on both devices.
+2. Pair the devices in Synapt using the device picker.
+3. Launch SynaptClip on both devices.
+4. SynaptClip detects Synapt automatically. No additional configuration is required.
 
 ## Related
 

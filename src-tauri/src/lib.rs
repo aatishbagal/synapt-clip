@@ -6,9 +6,11 @@ mod platform;
 mod search;
 mod share;
 mod storage;
+mod synapt;
+mod tray;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
@@ -32,6 +34,7 @@ pub struct AppState {
     pub clip_index: Arc<Mutex<SkipList>>,
     pub classifier: Arc<ClipClassifier>,
     pub clip_count: Arc<AtomicUsize>,
+    pub bridge_state: crate::synapt::bridge::SharedBridgeState,
 }
 
 pub fn clip_score(created_at: &str, pinned: bool) -> f64 {
@@ -44,10 +47,13 @@ pub fn clip_score(created_at: &str, pinned: bool) -> f64 {
     1.0 / (1.0 + seconds) + if pinned { 0.5 } else { 0.0 }
 }
 
-fn update_tray_tooltip(app: &tauri::AppHandle, count: usize) {
-    if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        let _ = tray.set_tooltip(Some(format!("SynaptClip — {count} clips")));
-    }
+/// Read the current bridge active/peer-count snapshot, tolerating lock poison.
+fn bridge_snapshot(state: &crate::synapt::bridge::SharedBridgeState) -> (bool, usize) {
+    let read = match state.read() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    (read.active, read.peers.len())
 }
 
 fn set_tray_warning(app: &tauri::AppHandle) {
@@ -205,6 +211,8 @@ pub fn run() {
     let clip_index = Arc::new(Mutex::new(skip_list));
     let classifier = Arc::new(ClipClassifier::new());
     let clip_count = Arc::new(AtomicUsize::new(initial_clips.len()));
+    let bridge_state: crate::synapt::bridge::SharedBridgeState =
+        Arc::new(RwLock::new(crate::synapt::bridge::BridgeState::inactive()));
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -218,11 +226,30 @@ pub fn run() {
             clip_index: clip_index.clone(),
             classifier: classifier.clone(),
             clip_count: clip_count.clone(),
+            bridge_state: bridge_state.clone(),
         })
         .setup(move |app| {
+            // macOS: hide the Dock icon (tray-only app).
+            #[cfg(target_os = "macos")]
+            platform::macos::setup();
+
             // Shared system tray: become the host (owns the single icon) or attach
             // as a client to an already-running Synapt/SynaptClip host.
             share::start(app);
+
+            // Background Synapt bridge: detect Synapt and track its peer list.
+            tauri::async_runtime::spawn(crate::synapt::bridge::start(
+                Arc::clone(&bridge_state),
+                clip_count.clone(),
+                app.handle().clone(),
+            ));
+
+            // Incoming-clip listener on port 57322: always runs, even when Synapt
+            // is not detected, since Synapt may start later.
+            tauri::async_runtime::spawn(crate::synapt::listener::start(
+                db.clone(),
+                app.handle().clone(),
+            ));
 
             if let Some(window) = app.get_webview_window("main") {
                 let w = window.clone();
@@ -298,6 +325,7 @@ pub fn run() {
             let index_writer = clip_index.clone();
             let classifier_ref = classifier.clone();
             let count_writer = clip_count.clone();
+            let bridge_reader = bridge_state.clone();
 
             let setup_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -396,7 +424,13 @@ pub fn run() {
                             }
 
                             let new_count = count_writer.fetch_add(1, Ordering::Relaxed) + 1;
-                            update_tray_tooltip(&app_handle, new_count);
+                            let (bridge_active, peer_count) = bridge_snapshot(&bridge_reader);
+                            crate::tray::update_tray_tooltip(
+                                &app_handle,
+                                new_count,
+                                bridge_active,
+                                peer_count,
+                            );
 
                             let mut depq_guard = depq_writer.lock().await;
                             while depq_guard.len() > HISTORY_LIMIT {
@@ -452,6 +486,10 @@ pub fn run() {
             commands::set_autostart,
             commands::get_autostart,
             commands::get_log_path,
+            commands::get_bridge_state,
+            commands::refresh_bridge_peers,
+            commands::send_clip_to_peer,
+            commands::send_latest_clip_to_peer,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

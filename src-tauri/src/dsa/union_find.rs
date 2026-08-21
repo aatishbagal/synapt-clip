@@ -226,6 +226,8 @@ mod tests {
             original_size: content.len() as i64,
             compressed_size: content.len() as i64,
             category: None,
+            sender_name: None,
+            sender_peer_id: None,
         }
     }
 
