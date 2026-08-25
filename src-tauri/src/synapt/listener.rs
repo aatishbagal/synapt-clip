@@ -102,6 +102,7 @@ async fn receive_handler(
                 serde_json::json!({
                     "clip_id": clip_id,
                     "sender_name": body.sender_name,
+                    "content": body.content,
                 }),
             );
             (StatusCode::OK, Json(ReceiveResponse { status: "accepted" })).into_response()
