@@ -402,6 +402,7 @@ pub struct PlatformInfo {
     pub backend: String,
     pub session_type: String,
     pub gch_installed: bool,
+    pub os: String,
 }
 
 #[tauri::command]
@@ -429,7 +430,14 @@ pub async fn get_platform_info() -> Result<PlatformInfo, String> {
         backend: backend_str,
         session_type,
         gch_installed,
+        os: std::env::consts::OS.to_string(),
     })
+}
+
+/// Report whether the configured global hotkey is currently registered with the OS.
+#[tauri::command]
+pub async fn get_hotkey_status(app: AppHandle) -> Result<bool, String> {
+    Ok(crate::hotkey::is_hotkey_registered(&app))
 }
 
 /// Show and focus the dedicated settings window.

@@ -477,6 +477,7 @@ pub fn run() {
             commands::get_settings,
             commands::set_setting,
             commands::get_platform_info,
+            commands::get_hotkey_status,
             clipboard::gch::get_gch_status,
             platform::detect::get_backend_status,
             commands::open_settings,
