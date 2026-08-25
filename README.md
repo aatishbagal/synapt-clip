@@ -136,3 +136,9 @@ Sent clips are transferred using Synapt's existing encrypted peer-to-peer transf
 
 - [Synapt](https://github.com/aatishbagal/synapt) -- Spotlight-style launcher and LAN file utility
 - [synapt-core](https://github.com/aatishbagal/synapt-core) -- shared type library used across the Synapt apps
+
+## License
+
+Copyright 2026 Aatish Bagal
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](./LICENSE) for the full text.
