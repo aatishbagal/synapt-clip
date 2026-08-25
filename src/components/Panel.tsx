@@ -15,7 +15,7 @@ import type { Clip } from "../types/clip";
 import type { SearchResult } from "../types/search";
 import type { BridgeState } from "../types/synapt";
 
-const VERSION = "v0.5.0";
+const VERSION = "v0.5.1";
 
 interface PanelProps {
   onOpenSettings?: () => void;
