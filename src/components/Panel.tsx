@@ -10,17 +10,27 @@ import { CategoryTabs } from "./CategoryTabs";
 import { GroupsView } from "./GroupsView";
 import { ContextMenu } from "./ContextMenu";
 import { DevicesSection } from "./DevicesSection";
+import { ClipReceivePopup } from "./ClipReceivePopup";
 import type { Clip } from "../types/clip";
 import type { SearchResult } from "../types/search";
 import type { BridgeState } from "../types/synapt";
 
-const VERSION = "v0.5.0";
+const VERSION = "v0.5.1";
 
 interface PanelProps {
   onOpenSettings?: () => void;
 }
 
 type ContextState = { x: number; y: number; clip: Clip } | null;
+
+type ReceivedClip = {
+  clip_id: number;
+  content: string;
+  sender_name: string;
+};
+
+// How long a clip stays highlighted after the popup's View button jumps to it.
+const VIEW_HIGHLIGHT_MS = 1500;
 
 export function Panel({ onOpenSettings }: PanelProps) {
   const [clips, setClips] = useState<Clip[]>([]);
@@ -36,6 +46,8 @@ export function Panel({ onOpenSettings }: PanelProps) {
   const [setupWarning, setSetupWarning] = useState<string | null>(null);
   const [undoStack, setUndoStack] = useState(0);
   const [contextMenu, setContextMenu] = useState<ContextState>(null);
+  const [receivePopup, setReceivePopup] = useState<ReceivedClip | null>(null);
+  const [scrollToClipId, setScrollToClipId] = useState<number | null>(null);
   const [bridgeState, setBridgeState] = useState<BridgeState>({
     active: false,
     peers: [],
@@ -88,6 +100,13 @@ export function Panel({ onOpenSettings }: PanelProps) {
     loadClipsForTab(activeTab);
   }, [activeTab, loadClipsForTab]);
 
+  // Drop the highlight once the user has had a moment to spot the clip.
+  useEffect(() => {
+    if (scrollToClipId == null) return;
+    const timer = setTimeout(() => setScrollToClipId(null), VIEW_HIGHLIGHT_MS);
+    return () => clearTimeout(timer);
+  }, [scrollToClipId]);
+
   useEffect(() => {
     invoke<BridgeState>("get_bridge_state")
       .then(setBridgeState)
@@ -98,9 +117,14 @@ export function Panel({ onOpenSettings }: PanelProps) {
     const unlistenBridge = listen<BridgeState>("bridge-state-changed", (e) =>
       setBridgeState(e.payload),
     );
-    const unlistenReceived = listen("clip-received", () =>
-      loadClipsForTab(activeTab),
-    );
+    const unlistenReceived = listen<ReceivedClip>("clip-received", (e) => {
+      loadClipsForTab(activeTab);
+      setReceivePopup({
+        clip_id: e.payload.clip_id,
+        content: e.payload.content ?? "",
+        sender_name: e.payload.sender_name,
+      });
+    });
 
     return () => {
       unlistenBridge.then((fn) => fn());
@@ -485,6 +509,24 @@ export function Panel({ onOpenSettings }: PanelProps) {
           selectedIds={selectedIds}
           onToggleSelect={toggleSelect}
           onRightClick={onCardRightClick}
+          scrollToId={scrollToClipId}
+        />
+      )}
+
+      {receivePopup && (
+        <ClipReceivePopup
+          clip_id={receivePopup.clip_id}
+          content={receivePopup.content}
+          sender_name={receivePopup.sender_name}
+          onCopy={() => setReceivePopup(null)}
+          onView={() => {
+            // A received clip always lands in the full history, which the other
+            // tabs may filter out, so jump back to All before scrolling to it.
+            setActiveTab("all");
+            setScrollToClipId(receivePopup.clip_id);
+            setReceivePopup(null);
+          }}
+          onDismiss={() => setReceivePopup(null)}
         />
       )}
 

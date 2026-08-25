@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { ClipCard } from "./ClipCard";
 import type { Clip } from "../types/clip";
 
@@ -11,6 +12,7 @@ interface ClipListProps {
   selectedIds?: Set<number>;
   onToggleSelect?: (id: number) => void;
   onRightClick?: (clip: Clip, e: React.MouseEvent) => void;
+  scrollToId?: number | null;
 }
 
 function SkeletonRow() {
@@ -41,7 +43,22 @@ export function ClipList({
   selectedIds,
   onToggleSelect,
   onRightClick,
+  scrollToId,
 }: ClipListProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Bring a specific clip into view, used when the receive popup's View button
+  // points at a clip that may be below the fold.
+  useEffect(() => {
+    if (scrollToId == null || loading) return;
+    const index = clips.findIndex((c) => c.id === scrollToId);
+    if (index < 0) return;
+    containerRef.current?.children[index]?.scrollIntoView({
+      block: "nearest",
+      behavior: "smooth",
+    });
+  }, [scrollToId, clips, loading]);
+
   if (loading) {
     return (
       <div className="flex-1 overflow-y-auto">
@@ -63,11 +80,12 @@ export function ClipList({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div ref={containerRef} className="flex-1 overflow-y-auto">
       {clips.map((clip) => (
         <ClipCard
           key={clip.id}
           clip={clip}
+          selected={clip.id === scrollToId}
           onCopy={onCopy}
           onDelete={onDelete}
           bulkMode={bulkMode}

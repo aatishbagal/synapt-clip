@@ -77,3 +77,31 @@ body {
 .panel-root.panel-visible {
   opacity: 1;
 }
+
+/* Incoming-clip notification popup (ClipReceivePopup). */
+@keyframes synapt-receive-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes synapt-receive-out {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes synapt-receive-progress {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}

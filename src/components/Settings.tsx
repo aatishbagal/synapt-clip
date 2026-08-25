@@ -11,6 +11,7 @@ interface PlatformInfo {
   backend: string;
   session_type: string;
   gch_installed: boolean;
+  os: string;
 }
 
 interface BackendStatusInfo {
@@ -36,6 +37,77 @@ const EXPIRY_OPTIONS: { value: string; label: string }[] = [
   { value: "90", label: "90 days" },
 ];
 
+// KeyboardEvent.code values, unlike event.key, are unaffected by which
+// modifiers are held. This matters on macOS, where holding Option rewrites
+// event.key: Option+V reports "\u221a" rather than "V", so a recorder that reads
+// event.key stores a combination the OS can never register.
+const MODIFIER_CODES = new Set([
+  "ControlLeft",
+  "ControlRight",
+  "AltLeft",
+  "AltRight",
+  "ShiftLeft",
+  "ShiftRight",
+  "MetaLeft",
+  "MetaRight",
+  "CapsLock",
+  "NumLock",
+  "ScrollLock",
+]);
+
+const NAMED_KEY_CODES = new Set([
+  "Space",
+  "Escape",
+  "Enter",
+  "Tab",
+  "Backspace",
+  "Delete",
+  "Insert",
+  "Home",
+  "End",
+  "PageUp",
+  "PageDown",
+  "Minus",
+  "Equal",
+  "Comma",
+  "Period",
+  "Slash",
+  "Backslash",
+  "Semicolon",
+  "Quote",
+  "Backquote",
+  "BracketLeft",
+  "BracketRight",
+]);
+
+// Translate a KeyboardEvent.code into a key name the Tauri global shortcut
+// parser accepts. Returns null for codes that cannot terminate a combination.
+function codeToShortcutKey(code: string): string | null {
+  if (code.startsWith("Key")) return code.slice(3);
+  if (code.startsWith("Digit")) return code.slice(5);
+  if (code.startsWith("Arrow")) return code.slice(5);
+  if (/^F\d{1,2}$/.test(code)) return code;
+  if (code.startsWith("Numpad")) return code;
+  if (NAMED_KEY_CODES.has(code)) return code;
+  return null;
+}
+
+// Stored combinations use the plugin's names (Ctrl, Alt, Shift, Super). macOS
+// users expect to read them back as the glyph-free names Apple uses.
+function formatHotkey(combo: string, isMac: boolean): string {
+  return combo
+    .split("+")
+    .map((part) => {
+      const token = part.trim();
+      if (!isMac) return token;
+      if (token === "Super") return "Cmd";
+      if (token === "Alt") return "Option";
+      if (token === "Ctrl") return "Control";
+      return token;
+    })
+    .join(" + ");
+}
+
 function parseExcluded(raw: string | undefined): string[] {
   if (!raw) return [];
   try {
@@ -58,6 +130,8 @@ export function Settings({ onClose }: SettingsProps) {
   const [excludedInput, setExcludedInput] = useState("");
   const [platform, setPlatform] = useState<PlatformInfo | null>(null);
   const [recordingHotkey, setRecordingHotkey] = useState(false);
+  const [hotkeyPreview, setHotkeyPreview] = useState("");
+  const [hotkeyActive, setHotkeyActive] = useState(true);
   const [hotkeyFeedback, setHotkeyFeedback] = useState<{ msg: string; ok: boolean } | null>(null);
   const hotkeyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [autostart, setAutostart] = useState(false);
@@ -90,6 +164,16 @@ export function Settings({ onClose }: SettingsProps) {
     invoke<string>("get_log_path")
       .then(setLogPath)
       .catch(() => {});
+
+    invoke<boolean>("get_hotkey_status")
+      .then(setHotkeyActive)
+      .catch(() => setHotkeyActive(true));
+  }, []);
+
+  const refreshHotkeyStatus = useCallback(() => {
+    invoke<boolean>("get_hotkey_status")
+      .then(setHotkeyActive)
+      .catch(() => setHotkeyActive(true));
   }, []);
 
   const persist = useCallback((key: string, value: string) => {
@@ -128,6 +212,8 @@ export function Settings({ onClose }: SettingsProps) {
     persist("excluded_apps", JSON.stringify(next));
   };
 
+  const isMac = platform?.os === "macos";
+
   const showHotkeyFeedback = (msg: string, ok: boolean) => {
     setHotkeyFeedback({ msg, ok });
     if (hotkeyFeedbackTimer.current) clearTimeout(hotkeyFeedbackTimer.current);
@@ -137,31 +223,64 @@ export function Settings({ onClose }: SettingsProps) {
   const handleHotkeyKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!recordingHotkey) return;
     e.preventDefault();
-    const parts: string[] = [];
-    if (e.ctrlKey) parts.push("Ctrl");
-    if (e.altKey) parts.push("Alt");
-    if (e.shiftKey) parts.push("Shift");
-    if (e.metaKey) parts.push("Super");
-    const key = e.key;
-    if (
-      key !== "Control" &&
-      key !== "Alt" &&
-      key !== "Shift" &&
-      key !== "Meta"
-    ) {
-      parts.push(key.length === 1 ? key.toUpperCase() : key);
-      const combo = parts.join("+");
-      setHotkey(combo);
-      setRecordingHotkey(false);
-      invoke("set_setting", { key: "hotkey", value: combo })
-        .then(() => showHotkeyFeedback("Hotkey updated", true))
-        .catch(() =>
-          showHotkeyFeedback(
-            "Could not register hotkey — try a different combination",
-            false,
-          ),
-        );
+    e.stopPropagation();
+
+    const stored: string[] = [];
+    const shown: string[] = [];
+    if (e.ctrlKey) {
+      stored.push("Ctrl");
+      shown.push(isMac ? "Control" : "Ctrl");
     }
+    if (e.altKey) {
+      stored.push("Alt");
+      shown.push(isMac ? "Option" : "Alt");
+    }
+    if (e.shiftKey) {
+      stored.push("Shift");
+      shown.push("Shift");
+    }
+    if (e.metaKey) {
+      stored.push("Super");
+      shown.push(isMac ? "Cmd" : "Super");
+    }
+
+    // Escape with nothing held cancels recording rather than being captured.
+    if (e.code === "Escape" && stored.length === 0) {
+      setRecordingHotkey(false);
+      setHotkeyPreview("");
+      return;
+    }
+
+    const key = MODIFIER_CODES.has(e.code) ? null : codeToShortcutKey(e.code);
+
+    // Only modifiers are down so far. Show them so the user can see the
+    // recorder responding, but wait for a key that can end the combination.
+    if (key === null) {
+      setHotkeyPreview(shown.length > 0 ? `${shown.join(" + ")} + ...` : "");
+      return;
+    }
+
+    if (stored.length === 0) {
+      setHotkeyPreview("Hold a modifier key as well");
+      return;
+    }
+
+    const combo = [...stored, key].join("+");
+    setHotkey(combo);
+    setHotkeyPreview("");
+    setRecordingHotkey(false);
+    invoke("set_setting", { key: "hotkey", value: combo })
+      .then(() => {
+        showHotkeyFeedback("Hotkey updated", true);
+        refreshHotkeyStatus();
+      })
+      .catch(() => {
+        showHotkeyFeedback(
+          "Could not register hotkey — try a different combination",
+          false,
+        );
+        refreshHotkeyStatus();
+      });
   };
 
   const handleToggleAutostart = (checked: boolean) => {
@@ -379,10 +498,17 @@ export function Settings({ onClose }: SettingsProps) {
           <Row label="Global hotkey">
             <input
               type="text"
-              value={recordingHotkey ? "Press a key combination..." : hotkey}
+              value={
+                recordingHotkey
+                  ? hotkeyPreview || "Press a key combination..."
+                  : formatHotkey(hotkey, isMac)
+              }
               readOnly
               onFocus={() => setRecordingHotkey(true)}
-              onBlur={() => setRecordingHotkey(false)}
+              onBlur={() => {
+                setRecordingHotkey(false);
+                setHotkeyPreview("");
+              }}
               onKeyDown={handleHotkeyKeyDown}
               className="rounded px-2 py-1 text-xs"
               style={{
@@ -403,6 +529,12 @@ export function Settings({ onClose }: SettingsProps) {
               }}
             >
               {hotkeyFeedback.msg}
+            </p>
+          )}
+          {!hotkeyActive && (
+            <p style={{ color: "var(--warning)", fontSize: 12 }}>
+              Hotkey inactive. The combination is most likely already claimed by
+              the system or another application. Try a different one.
             </p>
           )}
           {(platform?.backend === "gch" ||
