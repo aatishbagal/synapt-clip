@@ -44,7 +44,7 @@
       "active": true,
       "pubkey": "",
       "endpoints": [
-        "https://raw.githubusercontent.com/aatishbagal/synapt-clip/main/updater.json"
+        "https://github.com/aatishbagal/synapt-clip/releases/latest/download/latest.json"
       ],
       "dialog": false
     }
