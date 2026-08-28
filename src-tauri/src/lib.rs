@@ -1,5 +1,6 @@
 mod clipboard;
 mod commands;
+mod crash;
 mod dsa;
 mod hotkey;
 mod platform;
@@ -134,20 +135,8 @@ fn setup_logging() {
 }
 
 pub fn run() {
-    std::panic::set_hook(Box::new(|info| {
-        let crash_path = dirs::data_dir()
-            .unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join("synaptclip")
-            .join("crash.log");
-        let content = format!(
-            "SynaptClip crash\nVersion: {}\nTime: {:?}\nInfo: {}\n",
-            env!("CARGO_PKG_VERSION"),
-            std::time::SystemTime::now(),
-            info
-        );
-        let _ = std::fs::write(&crash_path, &content);
-        eprintln!("Crash log written to {:?}", crash_path);
-    }));
+    // Installed before anything else so a panic during startup is still logged.
+    crash::install_panic_hook();
 
     setup_logging();
 
@@ -495,6 +484,7 @@ pub fn run() {
             commands::set_autostart,
             commands::get_autostart,
             commands::get_log_path,
+            commands::get_crash_log_path,
             commands::get_bridge_state,
             commands::refresh_bridge_peers,
             commands::send_clip_to_peer,

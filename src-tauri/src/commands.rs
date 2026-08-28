@@ -496,6 +496,18 @@ pub async fn get_log_path() -> Result<String, String> {
         .unwrap_or_else(|| "unavailable".to_string()))
 }
 
+/// Path of the crash log, or None when no crash has been recorded.
+///
+/// Distinct from [`get_log_path`], which points at the ordinary tracing log.
+/// Returning None for a missing file lets the UI offer the crash log only when
+/// there is actually something in it.
+#[tauri::command]
+pub fn get_crash_log_path() -> Option<String> {
+    crate::crash::log_path()
+        .filter(|p| p.is_file())
+        .map(|p| p.to_string_lossy().to_string())
+}
+
 /// Result of queuing a clip transfer through Synapt.
 #[derive(Debug, serde::Serialize)]
 pub struct SendResult {

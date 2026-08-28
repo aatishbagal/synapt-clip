@@ -137,6 +137,9 @@ export function Settings({ onClose }: SettingsProps) {
   const [autostart, setAutostart] = useState(false);
   const [backendStatus, setBackendStatus] = useState<BackendStatusInfo | null>(null);
   const [logPath, setLogPath] = useState<string>("");
+  // Null until a crash has actually been recorded, so the row stays hidden on
+  // a healthy install.
+  const [crashLogPath, setCrashLogPath] = useState<string | null>(null);
 
   useEffect(() => {
     invoke<Record<string, string>>("get_settings")
@@ -164,6 +167,10 @@ export function Settings({ onClose }: SettingsProps) {
     invoke<string>("get_log_path")
       .then(setLogPath)
       .catch(() => {});
+
+    invoke<string | null>("get_crash_log_path")
+      .then(setCrashLogPath)
+      .catch(() => setCrashLogPath(null));
 
     invoke<boolean>("get_hotkey_status")
       .then(setHotkeyActive)
@@ -585,8 +592,25 @@ export function Settings({ onClose }: SettingsProps) {
                 }}
               />
             </Row>
+            {crashLogPath && (
+              <Row label="Crash log">
+                <input
+                  type="text"
+                  value={crashLogPath}
+                  readOnly
+                  className="rounded px-2 py-1 text-xs"
+                  style={{
+                    backgroundColor: "var(--bg)",
+                    color: "var(--muted)",
+                    border: "1px solid var(--border)",
+                    width: "260px",
+                    fontFamily: "monospace",
+                  }}
+                />
+              </Row>
+            )}
             <p className="text-xs" style={{ color: "var(--muted)" }}>
-              Share this file when reporting issues.
+              Share {crashLogPath ? "these files" : "this file"} when reporting issues.
             </p>
           </div>
         </Section>
