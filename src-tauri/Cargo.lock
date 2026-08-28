@@ -4704,7 +4704,7 @@ dependencies = [
 
 [[package]]
 name = "synapt-clip"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "arboard",
  "async-trait",
