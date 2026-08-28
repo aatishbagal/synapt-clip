@@ -508,6 +508,63 @@ pub fn get_crash_log_path() -> Option<String> {
         .map(|p| p.to_string_lossy().to_string())
 }
 
+/// An available update, as shown in the Settings About section.
+#[derive(serde::Serialize)]
+pub struct UpdateInfo {
+    /// Version offered by the update endpoint.
+    pub version: String,
+    /// Version currently running.
+    pub current: String,
+    /// Release notes from the endpoint, empty when it supplies none.
+    pub notes: String,
+}
+
+/// Check the update endpoint, returning None when already up to date.
+#[tauri::command]
+pub async fn check_for_update(app: tauri::AppHandle) -> Result<Option<UpdateInfo>, String> {
+    use tauri_plugin_updater::UpdaterExt;
+
+    let update = app
+        .updater()
+        .map_err(|e| e.to_string())?
+        .check()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(update.map(|u| UpdateInfo {
+        version: u.version.clone(),
+        current: u.current_version.clone(),
+        notes: u.body.clone().unwrap_or_default(),
+    }))
+}
+
+/// Download and install the available update, then restart into it.
+///
+/// Re-checks rather than taking a handle from [`check_for_update`], since the
+/// plugin's update handle is not `Send` across the command boundary.
+#[tauri::command]
+pub async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_updater::UpdaterExt;
+
+    let update = app
+        .updater()
+        .map_err(|e| e.to_string())?
+        .check()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    match update {
+        Some(update) => {
+            update
+                .download_and_install(|_chunk, _total| {}, || {})
+                .await
+                .map_err(|e| e.to_string())?;
+            app.restart();
+        }
+        None => Err("no update available".to_string()),
+    }
+}
+
 /// Result of queuing a clip transfer through Synapt.
 #[derive(Debug, serde::Serialize)]
 pub struct SendResult {

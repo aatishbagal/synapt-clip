@@ -22,6 +22,22 @@ interface BackendStatusInfo {
 
 type Theme = "dark" | "light" | "system";
 
+/// An update offered by the endpoint, as returned by the check_for_update command.
+interface UpdateInfo {
+  version: string;
+  current: string;
+  notes: string;
+}
+
+/// Where the Updates section's check has got to.
+type UpdateState =
+  | { kind: "idle" }
+  | { kind: "checking" }
+  | { kind: "available"; info: UpdateInfo }
+  | { kind: "none" }
+  | { kind: "installing" }
+  | { kind: "error"; message: string };
+
 const HISTORY_LIMITS: { value: string; label: string }[] = [
   { value: "50", label: "50" },
   { value: "100", label: "100" },
@@ -140,6 +156,28 @@ export function Settings({ onClose }: SettingsProps) {
   // Null until a crash has actually been recorded, so the row stays hidden on
   // a healthy install.
   const [crashLogPath, setCrashLogPath] = useState<string | null>(null);
+
+  const [updateState, setUpdateState] = useState<UpdateState>({ kind: "idle" });
+
+  const checkForUpdate = useCallback(async () => {
+    setUpdateState({ kind: "checking" });
+    try {
+      const info = await invoke<UpdateInfo | null>("check_for_update");
+      setUpdateState(info ? { kind: "available", info } : { kind: "none" });
+    } catch (e) {
+      setUpdateState({ kind: "error", message: `Update check failed: ${String(e)}` });
+    }
+  }, []);
+
+  const installUpdate = useCallback(async () => {
+    setUpdateState({ kind: "installing" });
+    try {
+      // Succeeds by restarting into the new version, so nothing follows it.
+      await invoke("install_update");
+    } catch (e) {
+      setUpdateState({ kind: "error", message: `Install failed: ${String(e)}` });
+    }
+  }, []);
 
   useEffect(() => {
     invoke<Record<string, string>>("get_settings")
@@ -573,6 +611,70 @@ export function Settings({ onClose }: SettingsProps) {
               {backendStatus.detail}
             </p>
           )}
+        </Section>
+
+        <Section title="Updates">
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              className="rounded px-2 py-1 text-xs self-start"
+              style={{
+                backgroundColor: "var(--surface)",
+                color: "var(--text)",
+                border: "1px solid var(--border)",
+              }}
+              disabled={
+                updateState.kind === "checking" || updateState.kind === "installing"
+              }
+              onClick={checkForUpdate}
+            >
+              Check for updates
+            </button>
+            {updateState.kind === "checking" && (
+              <p className="text-xs" style={{ color: "var(--muted)" }}>
+                Checking...
+              </p>
+            )}
+            {updateState.kind === "none" && (
+              <p className="text-xs" style={{ color: "var(--muted)" }}>
+                Up to date
+              </p>
+            )}
+            {updateState.kind === "installing" && (
+              <p className="text-xs" style={{ color: "var(--muted)" }}>
+                Downloading. SynaptClip will restart when it finishes.
+              </p>
+            )}
+            {updateState.kind === "error" && (
+              <p className="text-xs break-all" style={{ color: "var(--danger)" }}>
+                {updateState.message}
+              </p>
+            )}
+            {updateState.kind === "available" && (
+              <div className="flex flex-col gap-1">
+                <p className="text-xs" style={{ color: "var(--text)" }}>
+                  v{updateState.info.version} available
+                </p>
+                {updateState.info.notes && (
+                  <p className="text-xs" style={{ color: "var(--muted)" }}>
+                    {updateState.info.notes}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  className="rounded px-2 py-1 text-xs self-start"
+                  style={{
+                    backgroundColor: "var(--surface)",
+                    color: "var(--accent)",
+                    border: "1px solid var(--border)",
+                  }}
+                  onClick={installUpdate}
+                >
+                  Install and restart
+                </button>
+              </div>
+            )}
+          </div>
         </Section>
 
         <Section title="Diagnostics">

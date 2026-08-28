@@ -206,6 +206,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState {
             db: db.clone(),
             search_engine: search_engine.clone(),
@@ -485,6 +486,8 @@ pub fn run() {
             commands::get_autostart,
             commands::get_log_path,
             commands::get_crash_log_path,
+            commands::check_for_update,
+            commands::install_update,
             commands::get_bridge_state,
             commands::refresh_bridge_peers,
             commands::send_clip_to_peer,
