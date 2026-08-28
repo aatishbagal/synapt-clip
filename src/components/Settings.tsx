@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { X } from "lucide-react";
 import { Select } from "./Select";
+import { UnderlineLoader } from "./UnderlineLoader";
 
 interface SettingsProps {
   onClose: () => void;
@@ -37,6 +39,24 @@ type UpdateState =
   | { kind: "none" }
   | { kind: "installing" }
   | { kind: "error"; message: string };
+
+/// One-line status shown beside the update button.
+function updateStatusLabel(state: UpdateState): string {
+  switch (state.kind) {
+    case "idle":
+      return "Updates not checked yet";
+    case "checking":
+      return "Checking for updates...";
+    case "none":
+      return "Up to date";
+    case "available":
+      return `Version ${state.info.version} available`;
+    case "installing":
+      return "Downloading, SynaptClip will restart when it finishes";
+    case "error":
+      return `Could not check: ${state.message}`;
+  }
+}
 
 const HISTORY_LIMITS: { value: string; label: string }[] = [
   { value: "50", label: "50" },
@@ -157,7 +177,18 @@ export function Settings({ onClose }: SettingsProps) {
   // a healthy install.
   const [crashLogPath, setCrashLogPath] = useState<string | null>(null);
 
+  const [appVersion, setAppVersion] = useState("");
   const [updateState, setUpdateState] = useState<UpdateState>({ kind: "idle" });
+  const [autoUpdate, setAutoUpdate] = useState(true);
+
+  const updateBusy =
+    updateState.kind === "checking" || updateState.kind === "installing";
+  const updateTone =
+    updateState.kind === "available"
+      ? "var(--text)"
+      : updateState.kind === "error"
+        ? "var(--danger)"
+        : "var(--muted)";
 
   const checkForUpdate = useCallback(async () => {
     setUpdateState({ kind: "checking" });
@@ -165,9 +196,17 @@ export function Settings({ onClose }: SettingsProps) {
       const info = await invoke<UpdateInfo | null>("check_for_update");
       setUpdateState(info ? { kind: "available", info } : { kind: "none" });
     } catch (e) {
-      setUpdateState({ kind: "error", message: `Update check failed: ${String(e)}` });
+      setUpdateState({ kind: "error", message: String(e) });
     }
   }, []);
+
+  const toggleAutoUpdate = (enabled: boolean) => {
+    setAutoUpdate(enabled);
+    invoke("set_setting", {
+      key: "auto_update_check",
+      value: String(enabled),
+    }).catch((err) => console.error("Failed to set auto_update_check:", err));
+  };
 
   const installUpdate = useCallback(async () => {
     setUpdateState({ kind: "installing" });
@@ -187,8 +226,17 @@ export function Settings({ onClose }: SettingsProps) {
         setTheme(((s.theme as Theme) ?? "dark"));
         setHotkey(s.hotkey ?? "Super+Shift+V");
         setExcluded(parseExcluded(s.excluded_apps));
+        const auto = s.auto_update_check !== "false";
+        setAutoUpdate(auto);
+        // Check on open when the preference allows it, so the section shows
+        // real status rather than an inert button waiting to be clicked.
+        if (auto) void checkForUpdate();
       })
       .catch((err) => console.error("Failed to load settings:", err));
+
+    invoke<string>("get_app_version")
+      .then(setAppVersion)
+      .catch(() => setAppVersion(""));
 
     invoke<PlatformInfo>("get_platform_info")
       .then(setPlatform)
@@ -213,6 +261,17 @@ export function Settings({ onClose }: SettingsProps) {
     invoke<boolean>("get_hotkey_status")
       .then(setHotkeyActive)
       .catch(() => setHotkeyActive(true));
+  }, []);
+
+  // The startup check runs in the background, so surface its result if Settings
+  // happens to be open when it lands.
+  useEffect(() => {
+    const unlisten = listen<UpdateInfo>("update-available", (event) => {
+      setUpdateState({ kind: "available", info: event.payload });
+    });
+    return () => {
+      unlisten.then((fn) => fn()).catch(() => undefined);
+    };
   }, []);
 
   const refreshHotkeyStatus = useCallback(() => {
@@ -615,65 +674,73 @@ export function Settings({ onClose }: SettingsProps) {
 
         <Section title="Updates">
           <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              className="rounded px-2 py-1 text-xs self-start"
-              style={{
-                backgroundColor: "var(--surface)",
-                color: "var(--text)",
-                border: "1px solid var(--border)",
-              }}
-              disabled={
-                updateState.kind === "checking" || updateState.kind === "installing"
-              }
-              onClick={checkForUpdate}
+            <div className="flex flex-col gap-0.5">
+              <p className="text-xs" style={{ color: "var(--text)" }}>
+                SynaptClip
+              </p>
+              <p className="text-xs" style={{ color: "var(--muted)" }}>
+                Version {appVersion}
+              </p>
+            </div>
+
+            <div
+              className="flex items-center justify-between gap-3 pt-2"
+              style={{ borderTop: "1px solid var(--border)" }}
             >
-              Check for updates
-            </button>
-            {updateState.kind === "checking" && (
-              <p className="text-xs" style={{ color: "var(--muted)" }}>
-                Checking...
-              </p>
-            )}
-            {updateState.kind === "none" && (
-              <p className="text-xs" style={{ color: "var(--muted)" }}>
-                Up to date
-              </p>
-            )}
-            {updateState.kind === "installing" && (
-              <p className="text-xs" style={{ color: "var(--muted)" }}>
-                Downloading. SynaptClip will restart when it finishes.
-              </p>
-            )}
-            {updateState.kind === "error" && (
-              <p className="text-xs break-all" style={{ color: "var(--danger)" }}>
-                {updateState.message}
-              </p>
-            )}
-            {updateState.kind === "available" && (
-              <div className="flex flex-col gap-1">
-                <p className="text-xs" style={{ color: "var(--text)" }}>
-                  v{updateState.info.version} available
-                </p>
-                {updateState.info.notes && (
-                  <p className="text-xs" style={{ color: "var(--muted)" }}>
-                    {updateState.info.notes}
-                  </p>
-                )}
+              <span className="flex items-center gap-2 min-w-0">
+                {updateBusy && <UnderlineLoader state="active" width={16} />}
+                <span className="text-xs truncate" style={{ color: updateTone }}>
+                  {updateStatusLabel(updateState)}
+                </span>
+              </span>
+              {updateState.kind === "available" ? (
                 <button
                   type="button"
-                  className="rounded px-2 py-1 text-xs self-start"
+                  onClick={installUpdate}
+                  className="rounded px-2 py-1 text-xs shrink-0"
                   style={{
                     backgroundColor: "var(--surface)",
                     color: "var(--accent)",
                     border: "1px solid var(--border)",
                   }}
-                  onClick={installUpdate}
                 >
                   Install and restart
                 </button>
-              </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={checkForUpdate}
+                  disabled={updateBusy}
+                  className="rounded px-2 py-1 text-xs shrink-0"
+                  style={{
+                    backgroundColor: "var(--surface)",
+                    color: "var(--text)",
+                    border: "1px solid var(--border)",
+                    opacity: updateBusy ? 0.5 : 1,
+                  }}
+                >
+                  {updateState.kind === "idle" ? "Check for updates" : "Check again"}
+                </button>
+              )}
+            </div>
+
+            {updateState.kind === "available" && updateState.info.notes && (
+              <p className="text-xs" style={{ color: "var(--muted)" }}>
+                {updateState.info.notes}
+              </p>
             )}
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoUpdate}
+                onChange={(e) => toggleAutoUpdate(e.target.checked)}
+                style={{ accentColor: "var(--accent)" }}
+              />
+              <span className="text-xs" style={{ color: "var(--muted)" }}>
+                Check for updates automatically
+              </span>
+            </label>
           </div>
         </Section>
 

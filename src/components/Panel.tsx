@@ -15,8 +15,6 @@ import type { Clip } from "../types/clip";
 import type { SearchResult } from "../types/search";
 import type { BridgeState } from "../types/synapt";
 
-const VERSION = "v0.5.1";
-
 interface PanelProps {
   onOpenSettings?: () => void;
 }
@@ -33,6 +31,9 @@ type ReceivedClip = {
 const VIEW_HIGHLIGHT_MS = 1500;
 
 export function Panel({ onOpenSettings }: PanelProps) {
+  // Read from the binary rather than a constant here, so the header cannot
+  // drift from Cargo.toml and tauri.conf.json on a version bump.
+  const [version, setVersion] = useState("");
   const [clips, setClips] = useState<Clip[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -99,6 +100,10 @@ export function Panel({ onOpenSettings }: PanelProps) {
   useEffect(() => {
     loadClipsForTab(activeTab);
   }, [activeTab, loadClipsForTab]);
+
+  useEffect(() => {
+    invoke<string>("get_app_version").then(setVersion).catch(() => setVersion(""));
+  }, []);
 
   // Drop the highlight once the user has had a moment to spot the clip.
   useEffect(() => {
@@ -345,7 +350,7 @@ export function Panel({ onOpenSettings }: PanelProps) {
           />
           <span className="text-xs font-medium">SynaptClip</span>
           <span className="text-xs" style={{ color: "var(--muted)" }}>
-            {VERSION}
+            {version && `v${version}`}
           </span>
         </div>
 

@@ -508,8 +508,43 @@ pub fn get_crash_log_path() -> Option<String> {
         .map(|p| p.to_string_lossy().to_string())
 }
 
-/// An available update, as shown in the Settings About section.
-#[derive(serde::Serialize)]
+/// Version of the running build.
+///
+/// Served from the binary so the UI never carries a copy that can drift from
+/// Cargo.toml and tauri.conf.json.
+#[tauri::command]
+pub fn get_app_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
+/// Whether automatic update checks are enabled. Defaults to true when unset.
+pub async fn auto_update_enabled(db: &crate::storage::Db) -> bool {
+    db.get_setting("auto_update_check").await.ok().flatten().as_deref() != Some("false")
+}
+
+/// Run the startup update check, when the setting allows it.
+///
+/// Emits `update-available` so an open Settings window can show the result
+/// without the user asking.
+pub async fn run_auto_update_check(app: &AppHandle, db: &crate::storage::Db) {
+    if !auto_update_enabled(db).await {
+        tracing::debug!("automatic update check is disabled");
+        return;
+    }
+    match check_for_update(app.clone()).await {
+        Ok(Some(info)) => {
+            tracing::info!("update available: v{}", info.version);
+            if let Err(e) = app.emit("update-available", &info) {
+                tracing::warn!("could not emit update-available: {e}");
+            }
+        }
+        Ok(None) => tracing::info!("update check: already up to date"),
+        Err(e) => tracing::warn!("update check failed: {e}"),
+    }
+}
+
+/// An available update, as shown in the Settings Updates section.
+#[derive(Clone, serde::Serialize)]
 pub struct UpdateInfo {
     /// Version offered by the update endpoint.
     pub version: String,

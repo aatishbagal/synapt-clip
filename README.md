@@ -7,9 +7,16 @@
   </picture>
 </p>
 
+<p align="center">
+  <a href="https://github.com/aatishbagal/synapt-clip/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/aatishbagal/synapt-clip?label=release&color=3b82f6"></a>
+  <a href="https://github.com/aatishbagal/synapt-clip/actions/workflows/ci.yml"><img alt="CI status" src="https://img.shields.io/github/actions/workflow/status/aatishbagal/synapt-clip/ci.yml?label=CI"></a>
+  <a href="https://github.com/aatishbagal/synapt-clip/releases"><img alt="Total downloads" src="https://img.shields.io/github/downloads/aatishbagal/synapt-clip/total?label=downloads&color=3b82f6"></a>
+  <a href="./LICENSE"><img alt="License" src="https://img.shields.io/github/license/aatishbagal/synapt-clip?label=license"></a>
+</p>
+
 A clipboard manager for Linux and Windows, built with Rust and Tauri v2. Captures clipboard history, provides search, and optionally integrates with [Synapt](https://github.com/aatishbagal/synapt) for cross-device clipboard sharing over LAN.
 
-Currently in active development (v0.5.0).
+Currently in active development.
 
 ## Prerequisites
 

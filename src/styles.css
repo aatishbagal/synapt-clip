@@ -105,3 +105,21 @@ body {
     width: 0%;
   }
 }
+
+/* Activity loader: an underline that fills from the left, then empties from the
+   left, looping smoothly. Both ends of the cycle are zero-width so the loop is
+   seamless (no visible jump). Matches Synapt's indexing banner. */
+@keyframes underline-load {
+  0% {
+    left: 0%;
+    right: 100%;
+  }
+  50% {
+    left: 0%;
+    right: 0%;
+  }
+  100% {
+    left: 100%;
+    right: 0%;
+  }
+}

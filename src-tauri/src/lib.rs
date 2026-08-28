@@ -241,6 +241,15 @@ pub fn run() {
                 app.handle().clone(),
             ));
 
+            // Automatic update check. Delayed so it does not compete with the
+            // rest of startup for the first seconds.
+            let db_for_updates = db.clone();
+            let handle_updates = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+                commands::run_auto_update_check(&handle_updates, &db_for_updates).await;
+            });
+
             if let Some(window) = app.get_webview_window("main") {
                 let w = window.clone();
                 window.on_window_event(move |event| match event {
@@ -488,6 +497,7 @@ pub fn run() {
             commands::get_crash_log_path,
             commands::check_for_update,
             commands::install_update,
+            commands::get_app_version,
             commands::get_bridge_state,
             commands::refresh_bridge_peers,
             commands::send_clip_to_peer,
