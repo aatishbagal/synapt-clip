@@ -1,11 +1,17 @@
 name: CI
 
-# Runs only on pull requests into main, as the merge gate. Compiles, lints,
-# tests, and builds the frontend (debug build only — no bundling). Direct pushes
-# to dev do not trigger any build; releases are cut from main by release.yml.
+# The merge gate for pull requests into main, and a continuous check on dev.
+# Compiles, lints, tests, and builds the frontend (debug build only, no
+# bundling); releases are cut from main by release.yml.
+#
+# Running on dev pushes as well keeps this in step with Synapt's workflow, and
+# means work is validated on Linux as it lands rather than only once a release
+# PR is opened. Actions minutes are free on public repositories.
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [dev]
 
 jobs:
   test:

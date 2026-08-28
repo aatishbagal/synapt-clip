@@ -496,6 +496,110 @@ pub async fn get_log_path() -> Result<String, String> {
         .unwrap_or_else(|| "unavailable".to_string()))
 }
 
+/// Path of the crash log, or None when no crash has been recorded.
+///
+/// Distinct from [`get_log_path`], which points at the ordinary tracing log.
+/// Returning None for a missing file lets the UI offer the crash log only when
+/// there is actually something in it.
+#[tauri::command]
+pub fn get_crash_log_path() -> Option<String> {
+    crate::crash::log_path()
+        .filter(|p| p.is_file())
+        .map(|p| p.to_string_lossy().to_string())
+}
+
+/// Version of the running build.
+///
+/// Served from the binary so the UI never carries a copy that can drift from
+/// Cargo.toml and tauri.conf.json.
+#[tauri::command]
+pub fn get_app_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
+/// Whether automatic update checks are enabled. Defaults to true when unset.
+pub async fn auto_update_enabled(db: &crate::storage::Db) -> bool {
+    db.get_setting("auto_update_check").await.ok().flatten().as_deref() != Some("false")
+}
+
+/// Run the startup update check, when the setting allows it.
+///
+/// Emits `update-available` so an open Settings window can show the result
+/// without the user asking.
+pub async fn run_auto_update_check(app: &AppHandle, db: &crate::storage::Db) {
+    if !auto_update_enabled(db).await {
+        tracing::debug!("automatic update check is disabled");
+        return;
+    }
+    match check_for_update(app.clone()).await {
+        Ok(Some(info)) => {
+            tracing::info!("update available: v{}", info.version);
+            if let Err(e) = app.emit("update-available", &info) {
+                tracing::warn!("could not emit update-available: {e}");
+            }
+        }
+        Ok(None) => tracing::info!("update check: already up to date"),
+        Err(e) => tracing::warn!("update check failed: {e}"),
+    }
+}
+
+/// An available update, as shown in the Settings Updates section.
+#[derive(Clone, serde::Serialize)]
+pub struct UpdateInfo {
+    /// Version offered by the update endpoint.
+    pub version: String,
+    /// Version currently running.
+    pub current: String,
+    /// Release notes from the endpoint, empty when it supplies none.
+    pub notes: String,
+}
+
+/// Check the update endpoint, returning None when already up to date.
+#[tauri::command]
+pub async fn check_for_update(app: tauri::AppHandle) -> Result<Option<UpdateInfo>, String> {
+    use tauri_plugin_updater::UpdaterExt;
+
+    let update = app
+        .updater()
+        .map_err(|e| e.to_string())?
+        .check()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(update.map(|u| UpdateInfo {
+        version: u.version.clone(),
+        current: u.current_version.clone(),
+        notes: u.body.clone().unwrap_or_default(),
+    }))
+}
+
+/// Download and install the available update, then restart into it.
+///
+/// Re-checks rather than taking a handle from [`check_for_update`], since the
+/// plugin's update handle is not `Send` across the command boundary.
+#[tauri::command]
+pub async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_updater::UpdaterExt;
+
+    let update = app
+        .updater()
+        .map_err(|e| e.to_string())?
+        .check()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    match update {
+        Some(update) => {
+            update
+                .download_and_install(|_chunk, _total| {}, || {})
+                .await
+                .map_err(|e| e.to_string())?;
+            app.restart();
+        }
+        None => Err("no update available".to_string()),
+    }
+}
+
 /// Result of queuing a clip transfer through Synapt.
 #[derive(Debug, serde::Serialize)]
 pub struct SendResult {
