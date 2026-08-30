@@ -243,22 +243,58 @@ pub async fn assign_category(
         .map_err(|e| e.to_string())
 }
 
+/// Every category, each flagged as built-in or user-created.
 #[tauri::command]
-pub async fn get_categories(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+pub async fn get_categories(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::storage::CategoryRow>, String> {
     state
         .db
-        .get_categories()
+        .get_categories_with_type()
         .await
         .map_err(|e| e.to_string())
 }
 
+/// Delete a user-created category. Built-in categories are refused by the store.
 #[tauri::command]
 pub async fn delete_category(state: State<'_, AppState>, name: String) -> Result<(), String> {
     state
         .db
-        .delete_category(&name)
+        .delete_category_user_only(&name)
         .await
         .map_err(|e| e.to_string())
+}
+
+/// Turn auto-tagging for a system category on or off.
+#[tauri::command]
+pub async fn set_system_category_enabled(
+    category: String,
+    enabled: bool,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let key = crate::category_detect::enabled_setting_key(&category);
+    state
+        .db
+        .set_setting(&key, if enabled { "true" } else { "false" })
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Report whether auto-tagging is on for a system category. Defaults to on.
+#[tauri::command]
+pub async fn get_system_category_enabled(
+    category: String,
+    state: State<'_, AppState>,
+) -> Result<bool, String> {
+    let key = crate::category_detect::enabled_setting_key(&category);
+    let value = state.db.get_setting(&key).await.map_err(|e| e.to_string())?;
+    Ok(value.as_deref() != Some("false"))
+}
+
+/// The built-in category names, in detection order.
+#[tauri::command]
+pub fn get_system_categories() -> Vec<&'static str> {
+    crate::category_detect::SYSTEM_CATEGORIES.to_vec()
 }
 
 #[tauri::command]
@@ -763,17 +799,6 @@ pub async fn refresh_bridge_peers(
     }
     let body: R = resp.json().await.map_err(|e| e.to_string())?;
     Ok(body.peers)
-}
-
-#[tauri::command]
-pub async fn get_auto_categories() -> Result<Vec<String>, String> {
-    Ok(vec![
-        "Link".to_string(),
-        "File Path".to_string(),
-        "Code".to_string(),
-        "Email".to_string(),
-        "Color".to_string(),
-    ])
 }
 
 #[cfg(test)]

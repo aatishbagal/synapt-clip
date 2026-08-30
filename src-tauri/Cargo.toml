@@ -4,6 +4,7 @@ version = "0.5.2"
 edition = "2021"
 
 [dependencies]
+regex = "1"
 tauri = { version = "2", features = ["tray-icon"] }
 synapt-core = { path = "../../synapt-core" }
 tauri-plugin-shell = "2"

@@ -1,4 +1,4 @@
 mod db;
 
 #[allow(unused_imports)]
-pub use db::{Clip, Db, DbError};
+pub use db::{CategoryRow, Clip, Db, DbError};

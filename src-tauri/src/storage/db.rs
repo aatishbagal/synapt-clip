@@ -16,6 +16,17 @@ pub enum DbError {
     IoError(#[from] std::io::Error),
     #[error("huffman error: {0}")]
     Huffman(#[from] HuffmanError),
+    #[error("'{0}' is a built-in category and cannot be deleted")]
+    NotDeletable(String),
+}
+
+/// A category row with the flag marking the built-in ones.
+#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
+pub struct CategoryRow {
+    pub id: i64,
+    pub name: String,
+    /// 1 for the built-in system categories, 0 for user-created ones.
+    pub is_system: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -279,6 +290,41 @@ impl Db {
                 .fetch_all(&self.pool)
                 .await?;
         Ok(rows.into_iter().map(|r| r.0).collect())
+    }
+
+    /// Return every category with its system flag, system categories first.
+    pub async fn get_categories_with_type(&self) -> Result<Vec<CategoryRow>, DbError> {
+        Ok(sqlx::query_as(
+            "SELECT id, name, is_system FROM categories ORDER BY is_system DESC, name ASC",
+        )
+        .fetch_all(&self.pool)
+        .await?)
+    }
+
+    /// Delete a user-created category, refusing to touch the built-in ones.
+    ///
+    /// Guarding here rather than in the command keeps the rule enforced whichever
+    /// caller asks. Returns an error when the name is a system category or is not
+    /// present, so the caller can say why nothing happened.
+    pub async fn delete_category_user_only(&self, name: &str) -> Result<(), DbError> {
+        let mut tx = self.pool.begin().await?;
+        let deleted = sqlx::query("DELETE FROM categories WHERE name = ? AND is_system = 0")
+            .bind(name)
+            .execute(&mut *tx)
+            .await?
+            .rows_affected();
+
+        if deleted == 0 {
+            tx.rollback().await?;
+            return Err(DbError::NotDeletable(name.to_string()));
+        }
+
+        sqlx::query("UPDATE clips SET category = NULL WHERE category = ?")
+            .bind(name)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(())
     }
 
     /// Delete a category and unset it on any clips that referenced it.

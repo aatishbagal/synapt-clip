@@ -1,3 +1,4 @@
+mod category_detect;
 mod clipboard;
 mod commands;
 mod crash;
@@ -18,7 +19,6 @@ use tokio::sync::Mutex;
 use tracing_subscriber::EnvFilter;
 
 use crate::dsa::{should_group, ClipGroupManager, PersistentList, SkipList, VersionHistory};
-use crate::search::classifier::ClipClassifier;
 use crate::search::depq::Depq;
 use crate::search::engine::SearchEngine;
 use crate::storage::Clip;
@@ -33,7 +33,6 @@ pub struct AppState {
     pub clip_history: Arc<Mutex<VersionHistory<Clip>>>,
     pub group_manager: Arc<Mutex<ClipGroupManager>>,
     pub clip_index: Arc<Mutex<SkipList>>,
-    pub classifier: Arc<ClipClassifier>,
     pub clip_count: Arc<AtomicUsize>,
     pub bridge_state: crate::synapt::bridge::SharedBridgeState,
 }
@@ -198,7 +197,6 @@ pub fn run() {
     let clip_history = Arc::new(Mutex::new(VersionHistory::new(initial_version)));
     let group_manager = Arc::new(Mutex::new(group_manager));
     let clip_index = Arc::new(Mutex::new(skip_list));
-    let classifier = Arc::new(ClipClassifier::new());
     let clip_count = Arc::new(AtomicUsize::new(initial_clips.len()));
     let bridge_state: crate::synapt::bridge::SharedBridgeState =
         Arc::new(RwLock::new(crate::synapt::bridge::BridgeState::inactive()));
@@ -214,7 +212,6 @@ pub fn run() {
             clip_history: clip_history.clone(),
             group_manager: group_manager.clone(),
             clip_index: clip_index.clone(),
-            classifier: classifier.clone(),
             clip_count: clip_count.clone(),
             bridge_state: bridge_state.clone(),
         })
@@ -330,7 +327,6 @@ pub fn run() {
             let history_writer = clip_history.clone();
             let group_writer = group_manager.clone();
             let index_writer = clip_index.clone();
-            let classifier_ref = classifier.clone();
             let count_writer = clip_count.clone();
             let bridge_reader = bridge_state.clone();
 
@@ -390,10 +386,24 @@ pub fn run() {
                                 index_writer.lock().await.insert(score, clip.id);
                             }
 
+                            // Auto-tag with a system category, unless the user
+                            // has switched that category's detection off.
+                            if let Some(category) =
+                                crate::category_detect::detect_system_category(&clip.content)
                             {
-                                let category = classifier_ref.classify(&clip.content);
-                                if !matches!(category, crate::search::classifier::ClipCategory::PlainText) {
-                                    if let Err(e) = db_writer.assign_category(clip.id, Some(category.label())).await {
+                                let key =
+                                    crate::category_detect::enabled_setting_key(category);
+                                let enabled = db_writer
+                                    .get_setting(&key)
+                                    .await
+                                    .ok()
+                                    .flatten()
+                                    .as_deref()
+                                    != Some("false");
+                                if enabled {
+                                    if let Err(e) =
+                                        db_writer.assign_category(clip.id, Some(category)).await
+                                    {
                                         tracing::warn!("Failed to auto-assign category: {e}");
                                     }
                                 }
@@ -478,6 +488,9 @@ pub fn run() {
             commands::toggle_pin,
             commands::assign_category,
             commands::get_categories,
+            commands::set_system_category_enabled,
+            commands::get_system_category_enabled,
+            commands::get_system_categories,
             commands::delete_category,
             commands::bulk_delete,
             commands::clear_history,
@@ -492,7 +505,6 @@ pub fn run() {
             commands::open_settings,
             commands::close_settings,
             commands::get_ranked_clips,
-            commands::get_auto_categories,
             commands::set_autostart,
             commands::get_autostart,
             commands::get_log_path,
