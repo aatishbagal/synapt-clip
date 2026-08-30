@@ -434,6 +434,34 @@ pub async fn get_platform_info() -> Result<PlatformInfo, String> {
     })
 }
 
+/// Release the global hotkey while the settings recorder is capturing keys.
+///
+/// Without this the OS consumes the current combination before the webview sees
+/// it, so pressing it in the recorder triggers the panel instead of being
+/// recorded. Always paired with `resume_hotkey`.
+#[tauri::command]
+pub async fn pause_hotkey(app: AppHandle) -> Result<(), String> {
+    crate::hotkey::unregister_hotkey(&app)
+}
+
+/// Re-register the stored hotkey after the recorder closes.
+///
+/// Reads the preference back from the database rather than trusting the caller,
+/// so a cancelled recording restores exactly what was in effect before.
+#[tauri::command]
+pub async fn resume_hotkey(
+    app: AppHandle,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<(), String> {
+    let hotkey = state
+        .db
+        .get_setting("hotkey")
+        .await
+        .map_err(|e| e.to_string())?
+        .unwrap_or_else(|| crate::hotkey::DEFAULT_HOTKEY.to_string());
+    crate::hotkey::register_hotkey(&app, &hotkey)
+}
+
 /// Report whether the configured global hotkey is currently registered with the OS.
 #[tauri::command]
 pub async fn get_hotkey_status(app: AppHandle) -> Result<bool, String> {

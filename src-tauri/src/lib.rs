@@ -162,7 +162,7 @@ pub fn run() {
             .get_setting("hotkey")
             .await
             .unwrap_or(None)
-            .unwrap_or_else(|| "Super+Shift+V".to_string());
+            .unwrap_or_else(|| hotkey::DEFAULT_HOTKEY.to_string());
         (db, clips, hotkey_val)
     });
 
@@ -485,6 +485,8 @@ pub fn run() {
             commands::set_setting,
             commands::get_platform_info,
             commands::get_hotkey_status,
+            commands::pause_hotkey,
+            commands::resume_hotkey,
             clipboard::gch::get_gch_status,
             platform::detect::get_backend_status,
             commands::open_settings,

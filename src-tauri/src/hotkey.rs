@@ -3,6 +3,10 @@ use std::sync::{Mutex, OnceLock};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
+/// Hotkey used when no preference has been stored yet. Kept here so startup
+/// registration and the recorder's resume path cannot drift apart.
+pub const DEFAULT_HOTKEY: &str = "Super+Shift+V";
+
 /// Shortcut string that was last registered successfully, so the frontend can
 /// tell whether the global hotkey is actually live.
 fn registered_shortcut() -> &'static Mutex<Option<String>> {
@@ -70,6 +74,22 @@ pub fn register_hotkey(app: &AppHandle, hotkey_str: &str) -> Result<(), String> 
             Err(format!("Failed to register hotkey '{trimmed}': {e}"))
         }
     }
+}
+
+/// Release the global shortcut without forgetting the user's preference.
+///
+/// The hotkey recorder needs this on Windows: `RegisterHotKey` claims the
+/// combination at the OS message loop, so pressing the current hotkey while the
+/// recorder is open fires the show-panel action instead of reaching the webview,
+/// and `preventDefault` in JavaScript never gets the chance to run. macOS taps
+/// events at a level that does not intercept them this way, which is why only
+/// Windows shows the bug. Call `register_hotkey` again to restore the shortcut.
+pub fn unregister_hotkey(app: &AppHandle) -> Result<(), String> {
+    app.global_shortcut()
+        .unregister_all()
+        .map_err(|e| format!("Failed to release the global hotkey: {e}"))?;
+    set_registered(None);
+    Ok(())
 }
 
 /// Report whether the configured global hotkey is currently registered with the OS.

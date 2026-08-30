@@ -77,6 +77,11 @@ const EXPIRY_OPTIONS: { value: string; label: string }[] = [
 // modifiers are held. This matters on macOS, where holding Option rewrites
 // event.key: Option+V reports "\u221a" rather than "V", so a recorder that reads
 // event.key stores a combination the OS can never register.
+/// How long the recorder stays open with no key pressed before it gives the
+/// global hotkey back. The hotkey does nothing while recording, so this bounds
+/// how long an abandoned recorder can leave it inert.
+const RECORDING_TIMEOUT_MS = 15000;
+
 const MODIFIER_CODES = new Set([
   "ControlLeft",
   "ControlRight",
@@ -324,6 +329,35 @@ export function Settings({ onClose }: SettingsProps) {
     hotkeyFeedbackTimer.current = setTimeout(() => setHotkeyFeedback(null), 2000);
   };
 
+  // Entering and leaving recording mode must bracket the global hotkey. On
+  // Windows the OS claims the registered combination at the message loop, so
+  // while the shortcut is live the recorder can never observe the user pressing
+  // it -- the panel opens instead. Releasing it first lets the keydown handler
+  // see every combination, including the one already in use.
+  const startRecording = useCallback(() => {
+    setRecordingHotkey(true);
+    setHotkeyPreview("");
+    invoke("pause_hotkey").catch(() => {
+      // Recording still works for combinations other than the current one.
+    });
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    setRecordingHotkey(false);
+    setHotkeyPreview("");
+    invoke("resume_hotkey")
+      .then(refreshHotkeyStatus)
+      .catch(refreshHotkeyStatus);
+  }, [refreshHotkeyStatus]);
+
+  // The hotkey is inert while recording, so a recorder left open by accident
+  // would silently disable it. Give up after a while and put it back.
+  useEffect(() => {
+    if (!recordingHotkey) return;
+    const timer = setTimeout(stopRecording, RECORDING_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [recordingHotkey, stopRecording]);
+
   const handleHotkeyKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!recordingHotkey) return;
     e.preventDefault();
@@ -350,8 +384,7 @@ export function Settings({ onClose }: SettingsProps) {
 
     // Escape with nothing held cancels recording rather than being captured.
     if (e.code === "Escape" && stored.length === 0) {
-      setRecordingHotkey(false);
-      setHotkeyPreview("");
+      stopRecording();
       return;
     }
 
@@ -373,6 +406,9 @@ export function Settings({ onClose }: SettingsProps) {
     setHotkey(combo);
     setHotkeyPreview("");
     setRecordingHotkey(false);
+    // set_setting registers the captured combination, which supersedes the
+    // paused one, so this path deliberately does not call resume_hotkey. If it
+    // fails nothing is registered, so fall back to restoring the old hotkey.
     invoke("set_setting", { key: "hotkey", value: combo })
       .then(() => {
         showHotkeyFeedback("Hotkey updated", true);
@@ -383,7 +419,9 @@ export function Settings({ onClose }: SettingsProps) {
           "Could not register hotkey — try a different combination",
           false,
         );
-        refreshHotkeyStatus();
+        invoke("resume_hotkey")
+          .then(refreshHotkeyStatus)
+          .catch(refreshHotkeyStatus);
       });
   };
 
@@ -608,10 +646,9 @@ export function Settings({ onClose }: SettingsProps) {
                   : formatHotkey(hotkey, isMac)
               }
               readOnly
-              onFocus={() => setRecordingHotkey(true)}
+              onFocus={startRecording}
               onBlur={() => {
-                setRecordingHotkey(false);
-                setHotkeyPreview("");
+                if (recordingHotkey) stopRecording();
               }}
               onKeyDown={handleHotkeyKeyDown}
               className="rounded px-2 py-1 text-xs"
