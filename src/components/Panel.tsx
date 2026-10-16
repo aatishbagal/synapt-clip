@@ -11,7 +11,7 @@ import { GroupsView } from "./GroupsView";
 import { ContextMenu } from "./ContextMenu";
 import { DevicesSection } from "./DevicesSection";
 import { ClipReceivePopup } from "./ClipReceivePopup";
-import type { Clip } from "../types/clip";
+import type { Category, Clip } from "../types/clip";
 import type { SearchResult } from "../types/search";
 import type { BridgeState } from "../types/synapt";
 
@@ -41,7 +41,7 @@ export function Panel({ onOpenSettings }: PanelProps) {
   const [activeQuery, setActiveQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [activeTab, setActiveTab] = useState<string>("all");
-  const [categories, setCategories] = useState<string[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkMode, setBulkMode] = useState(false);
   const [setupWarning, setSetupWarning] = useState<string | null>(null);
@@ -57,7 +57,7 @@ export function Panel({ onOpenSettings }: PanelProps) {
   const rootRef = useRef<HTMLDivElement>(null);
 
   const reloadCategories = useCallback(() => {
-    invoke<string[]>("get_categories")
+    invoke<Category[]>("get_categories")
       .then(setCategories)
       .catch((err) => console.error("Failed to load categories:", err));
   }, []);

@@ -3,6 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { X } from "lucide-react";
 import { Select } from "./Select";
+import { InlineConfirm } from "./InlineConfirm";
+import type { Category } from "../types/clip";
 import { UnderlineLoader } from "./UnderlineLoader";
 
 interface SettingsProps {
@@ -77,6 +79,21 @@ const EXPIRY_OPTIONS: { value: string; label: string }[] = [
 // modifiers are held. This matters on macOS, where holding Option rewrites
 // event.key: Option+V reports "\u221a" rather than "V", so a recorder that reads
 // event.key stores a combination the OS can never register.
+/// How long the recorder stays open with no key pressed before it gives the
+/// global hotkey back. The hotkey does nothing while recording, so this bounds
+/// how long an abandoned recorder can leave it inert.
+const RECORDING_TIMEOUT_MS = 15000;
+
+/// What each built-in category matches, shown under its toggle.
+const SYSTEM_CATEGORY_HINTS: Record<string, string> = {
+  Links: "URLs starting with http:// or https://",
+  Code: "Multi-line text that looks like source code",
+  Email: "Email addresses",
+  Phone: "Phone numbers in common formats",
+  "File Path": "Absolute, ~/ and ./ file paths",
+  Color: "Hex colors such as #1a2b3c",
+};
+
 const MODIFIER_CODES = new Set([
   "ControlLeft",
   "ControlRight",
@@ -165,6 +182,12 @@ export function Settings({ onClose }: SettingsProps) {
   const [excluded, setExcluded] = useState<string[]>([]);
   const [excludedInput, setExcludedInput] = useState("");
   const [platform, setPlatform] = useState<PlatformInfo | null>(null);
+
+  // --- Categories ---
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [systemNames, setSystemNames] = useState<string[]>([]);
+  const [categoryEnabled, setCategoryEnabled] = useState<Record<string, boolean>>({});
+  const [confirmDeleteCategory, setConfirmDeleteCategory] = useState<string | null>(null);
   const [recordingHotkey, setRecordingHotkey] = useState(false);
   const [hotkeyPreview, setHotkeyPreview] = useState("");
   const [hotkeyActive, setHotkeyActive] = useState(true);
@@ -324,6 +347,72 @@ export function Settings({ onClose }: SettingsProps) {
     hotkeyFeedbackTimer.current = setTimeout(() => setHotkeyFeedback(null), 2000);
   };
 
+  const reloadCategories = useCallback(async () => {
+    const rows = await invoke<Category[]>("get_categories").catch(() => []);
+    setCategories(rows);
+
+    const names = await invoke<string[]>("get_system_categories").catch(() => []);
+    setSystemNames(names);
+
+    const flags: Record<string, boolean> = {};
+    for (const name of names) {
+      flags[name] = await invoke<boolean>("get_system_category_enabled", {
+        category: name,
+      }).catch(() => true);
+    }
+    setCategoryEnabled(flags);
+  }, []);
+
+  useEffect(() => {
+    void reloadCategories();
+  }, [reloadCategories]);
+
+  const toggleSystemCategory = (name: string, enabled: boolean) => {
+    setCategoryEnabled((prev) => ({ ...prev, [name]: enabled }));
+    invoke("set_system_category_enabled", { category: name, enabled }).catch(() => {
+      // Put the switch back if the write did not land.
+      setCategoryEnabled((prev) => ({ ...prev, [name]: !enabled }));
+    });
+  };
+
+  const deleteUserCategory = (name: string) => {
+    invoke("delete_category", { name })
+      .then(() => {
+        setConfirmDeleteCategory(null);
+        void reloadCategories();
+      })
+      .catch((err) => console.error("Failed to delete category:", err));
+  };
+
+  // Entering and leaving recording mode must bracket the global hotkey. On
+  // Windows the OS claims the registered combination at the message loop, so
+  // while the shortcut is live the recorder can never observe the user pressing
+  // it -- the panel opens instead. Releasing it first lets the keydown handler
+  // see every combination, including the one already in use.
+  const startRecording = useCallback(() => {
+    setRecordingHotkey(true);
+    setHotkeyPreview("");
+    invoke("pause_hotkey").catch(() => {
+      // Recording still works for combinations other than the current one.
+    });
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    setRecordingHotkey(false);
+    setHotkeyPreview("");
+    invoke("resume_hotkey")
+      .then(refreshHotkeyStatus)
+      .catch(refreshHotkeyStatus);
+  }, [refreshHotkeyStatus]);
+
+  // The hotkey is inert while recording, so a recorder left open by accident
+  // would silently disable it. Give up after a while and put it back.
+  useEffect(() => {
+    if (!recordingHotkey) return;
+    const timer = setTimeout(stopRecording, RECORDING_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [recordingHotkey, stopRecording]);
+
   const handleHotkeyKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!recordingHotkey) return;
     e.preventDefault();
@@ -350,8 +439,7 @@ export function Settings({ onClose }: SettingsProps) {
 
     // Escape with nothing held cancels recording rather than being captured.
     if (e.code === "Escape" && stored.length === 0) {
-      setRecordingHotkey(false);
-      setHotkeyPreview("");
+      stopRecording();
       return;
     }
 
@@ -373,6 +461,9 @@ export function Settings({ onClose }: SettingsProps) {
     setHotkey(combo);
     setHotkeyPreview("");
     setRecordingHotkey(false);
+    // set_setting registers the captured combination, which supersedes the
+    // paused one, so this path deliberately does not call resume_hotkey. If it
+    // fails nothing is registered, so fall back to restoring the old hotkey.
     invoke("set_setting", { key: "hotkey", value: combo })
       .then(() => {
         showHotkeyFeedback("Hotkey updated", true);
@@ -383,7 +474,9 @@ export function Settings({ onClose }: SettingsProps) {
           "Could not register hotkey — try a different combination",
           false,
         );
-        refreshHotkeyStatus();
+        invoke("resume_hotkey")
+          .then(refreshHotkeyStatus)
+          .catch(refreshHotkeyStatus);
       });
   };
 
@@ -574,6 +667,72 @@ export function Settings({ onClose }: SettingsProps) {
           </div>
         </Section>
 
+        <Section title="Categories">
+          {systemNames.map((name) => (
+            <div key={name} className="flex flex-col gap-0.5">
+              <Row label={name}>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={categoryEnabled[name] ?? true}
+                    onChange={(e) => toggleSystemCategory(name, e.target.checked)}
+                    style={{ accentColor: "var(--accent)" }}
+                  />
+                </label>
+              </Row>
+              <span className="text-[11px]" style={{ color: "var(--muted)" }}>
+                {SYSTEM_CATEGORY_HINTS[name] ?? ""}
+              </span>
+            </div>
+          ))}
+          <p className="text-[11px]" style={{ color: "var(--muted)" }}>
+            Disabling a category stops auto-tagging new clips. Existing tagged clips
+            are not affected.
+          </p>
+
+          <div
+            className="flex flex-col gap-2"
+            style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}
+          >
+            <span className="text-[11px] uppercase tracking-wider" style={{ color: "var(--muted)" }}>
+              Your categories
+            </span>
+            {categories.filter((c) => c.is_system === 0).length === 0 ? (
+              <p className="text-[11px]" style={{ color: "var(--muted)" }}>
+                No custom categories yet. Right-click a clip to add it to a category.
+              </p>
+            ) : (
+              categories
+                .filter((c) => c.is_system === 0)
+                .map((cat) => (
+                  <div key={cat.id} className="flex flex-col gap-2">
+                    <Row label={cat.name}>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteCategory(cat.name)}
+                        className="rounded px-2 py-0.5 text-xs"
+                        style={{
+                          backgroundColor: "transparent",
+                          color: "var(--danger)",
+                          border: "1px solid var(--border)",
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </Row>
+                    {confirmDeleteCategory === cat.name && (
+                      <InlineConfirm
+                        message={`Delete category "${cat.name}"? Clips in this category will not be deleted.`}
+                        onConfirm={() => deleteUserCategory(cat.name)}
+                        onCancel={() => setConfirmDeleteCategory(null)}
+                      />
+                    )}
+                  </div>
+                ))
+            )}
+          </div>
+        </Section>
+
         <Section title="Appearance">
           <Row label="Theme">
             <div className="flex items-center gap-3">
@@ -608,10 +767,9 @@ export function Settings({ onClose }: SettingsProps) {
                   : formatHotkey(hotkey, isMac)
               }
               readOnly
-              onFocus={() => setRecordingHotkey(true)}
+              onFocus={startRecording}
               onBlur={() => {
-                setRecordingHotkey(false);
-                setHotkeyPreview("");
+                if (recordingHotkey) stopRecording();
               }}
               onKeyDown={handleHotkeyKeyDown}
               className="rounded px-2 py-1 text-xs"

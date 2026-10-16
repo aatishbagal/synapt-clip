@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { useState } from "react";
 import { X } from "lucide-react";
+import type { Category } from "../types/clip";
+import { InlineConfirm } from "./InlineConfirm";
 
 interface CategoryTabsProps {
-  categories: string[];
+  categories: Category[];
   active: string;
   onChange: (tab: string) => void;
   onDeleteCategory: (name: string) => void;
@@ -29,17 +30,11 @@ export function CategoryTabs({
   onDeleteCategory,
 }: CategoryTabsProps) {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [autoCategories, setAutoCategories] = useState<string[]>([]);
 
-  useEffect(() => {
-    invoke<string[]>("get_auto_categories")
-      .then(setAutoCategories)
-      .catch(() => {});
-  }, []);
-
-  const renderTab = (id: string, label: string, deletable: boolean) => {
+  // A tab is deletable only when the user created it. System categories are
+  // built in and are turned off from Settings rather than removed.
+  const renderTab = (id: string, label: string, deletable: boolean, isAuto: boolean) => {
     const isActive = active === id;
-    const isAuto = autoCategories.includes(id);
     return (
       <div
         key={id}
@@ -69,15 +64,9 @@ export function CategoryTabs({
             className="opacity-0 group-hover:opacity-100 rounded"
             onClick={(e) => {
               e.stopPropagation();
-              if (confirmDelete === id) {
-                onDeleteCategory(id);
-                setConfirmDelete(null);
-              } else {
-                setConfirmDelete(id);
-                setTimeout(() => setConfirmDelete(null), 3000);
-              }
+              setConfirmDelete(id);
             }}
-            title={confirmDelete === id ? "Click again to confirm" : "Delete category"}
+            title="Delete category"
             style={{
               color: confirmDelete === id ? DANGER : MUTED,
             }}
@@ -90,15 +79,29 @@ export function CategoryTabs({
   };
 
   return (
-    <div
-      className="flex items-center shrink-0 overflow-x-auto"
-      style={{
-        borderBottom: `1px solid ${BORDER}`,
-        backgroundColor: TAB_BG,
-      }}
-    >
-      {BASE_TABS.map((t) => renderTab(t.id, t.label, false))}
-      {categories.map((cat) => renderTab(cat, cat, true))}
+    <div className="shrink-0" style={{ backgroundColor: TAB_BG }}>
+      <div
+        className="flex items-center overflow-x-auto"
+        style={{ borderBottom: `1px solid ${BORDER}` }}
+      >
+        {BASE_TABS.map((t) => renderTab(t.id, t.label, false, false))}
+        {categories.map((cat) =>
+          renderTab(cat.name, cat.name, cat.is_system === 0, cat.is_system === 1),
+        )}
+      </div>
+
+      {confirmDelete !== null && (
+        <div style={{ padding: 8, borderBottom: `1px solid ${BORDER}` }}>
+          <InlineConfirm
+            message={`Delete category "${confirmDelete}"? Clips in this category will not be deleted.`}
+            onConfirm={() => {
+              onDeleteCategory(confirmDelete);
+              setConfirmDelete(null);
+            }}
+            onCancel={() => setConfirmDelete(null)}
+          />
+        </div>
+      )}
     </div>
   );
 }

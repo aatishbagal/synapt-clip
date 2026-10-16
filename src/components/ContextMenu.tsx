@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import type { Clip } from "../types/clip";
+import { invoke } from "@tauri-apps/api/core";
+import type { Category, Clip } from "../types/clip";
 import type { SynaptPeer } from "../types/synapt";
 
 interface ContextMenuProps {
   x: number;
   y: number;
   clip: Clip;
-  categories: string[];
+  categories: Category[];
   onClose: () => void;
   onCopy: () => void;
   onPin: () => void;
@@ -46,6 +47,26 @@ export function ContextMenu({
     {},
   );
   const [sentPeers, setSentPeers] = useState<Set<string>>(new Set());
+  // System categories the user has switched off. They stay listed so the set of
+  // categories does not shift around, but cannot be assigned by hand.
+  const [disabledSystem, setDisabledSystem] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const off = new Set<string>();
+      for (const cat of categories.filter((c) => c.is_system === 1)) {
+        const on = await invoke<boolean>("get_system_category_enabled", {
+          category: cat.name,
+        }).catch(() => true);
+        if (!on) off.add(cat.name);
+      }
+      if (!cancelled) setDisabledSystem(off);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [categories]);
 
   const onlinePeers = (peers ?? []).filter(
     (p) => p.online && !sentPeers.has(p.id),
@@ -172,29 +193,35 @@ export function ContextMenu({
                 No categories yet
               </div>
             )}
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                className={itemClass}
-                style={{ color: TEXT }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = MENU_HOVER;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = "transparent";
-                }}
-                onClick={() => {
-                  onCategoryAssign(cat);
-                  onClose();
-                }}
-              >
-                <span>{cat}</span>
-                {clip.category === cat && (
-                  <span style={{ color: MUTED }}>active</span>
-                )}
-              </button>
-            ))}
+            {categories.map((cat) => {
+              const off = disabledSystem.has(cat.name);
+              return (
+                <button
+                  key={cat.name}
+                  type="button"
+                  disabled={off}
+                  className={itemClass}
+                  style={{ color: off ? MUTED : TEXT, opacity: off ? 0.5 : 1 }}
+                  onMouseEnter={(e) => {
+                    if (!off) e.currentTarget.style.backgroundColor = MENU_HOVER;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "transparent";
+                  }}
+                  onClick={() => {
+                    if (off) return;
+                    onCategoryAssign(cat.name);
+                    onClose();
+                  }}
+                >
+                  <span>{cat.name}</span>
+                  {clip.category === cat.name && (
+                    <span style={{ color: MUTED }}>active</span>
+                  )}
+                  {off && <span style={{ color: MUTED }}>off</span>}
+                </button>
+              );
+            })}
             <button
               type="button"
               className={itemClass}

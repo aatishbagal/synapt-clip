@@ -267,7 +267,7 @@ mod tests {
     fn random_level_in_bounds() {
         for _ in 0..200 {
             let l = random_level();
-            assert!(l >= 1 && l <= MAX_LEVEL);
+            assert!((1..=MAX_LEVEL).contains(&l));
         }
     }
 

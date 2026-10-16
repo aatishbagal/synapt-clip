@@ -4704,7 +4704,7 @@ dependencies = [
 
 [[package]]
 name = "synapt-clip"
-version = "0.5.2"
+version = "0.5.3"
 dependencies = [
  "arboard",
  "async-trait",
@@ -4714,6 +4714,7 @@ dependencies = [
  "notify",
  "objc",
  "rand 0.8.5",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",

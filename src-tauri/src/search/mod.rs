@@ -1,5 +1,4 @@
 pub mod bloom;
-pub mod classifier;
 pub mod depq;
 pub mod engine;
 pub mod fuzzy;
