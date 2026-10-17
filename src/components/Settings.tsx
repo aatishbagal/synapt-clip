@@ -1,3 +1,6 @@
+import { useCoreUpdate } from '../hooks/useCoreUpdate';
+import { CoreUpdateNotice } from './CoreUpdateNotice';
+import { useHotkeyInfo } from "../hooks/useHotkeyInfo";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -179,6 +182,7 @@ export function Settings({ onClose }: SettingsProps) {
   const [expiryDays, setExpiryDays] = useState("0");
   const [theme, setTheme] = useState<Theme>("dark");
   const [hotkey, setHotkey] = useState("Super+Shift+V");
+  const shortcut = useHotkeyInfo();
   const [excluded, setExcluded] = useState<string[]>([]);
   const [excludedInput, setExcludedInput] = useState("");
   const [platform, setPlatform] = useState<PlatformInfo | null>(null);
@@ -200,12 +204,14 @@ export function Settings({ onClose }: SettingsProps) {
   // a healthy install.
   const [crashLogPath, setCrashLogPath] = useState<string | null>(null);
 
+  const coreUpdate = useCoreUpdate();
+  const checkCoreUpdate = coreUpdate.check;
   const [appVersion, setAppVersion] = useState("");
   const [updateState, setUpdateState] = useState<UpdateState>({ kind: "idle" });
   const [autoUpdate, setAutoUpdate] = useState(true);
 
   const updateBusy =
-    updateState.kind === "checking" || updateState.kind === "installing";
+    coreUpdate.checking || updateState.kind === "checking" || updateState.kind === "installing";
   const updateTone =
     updateState.kind === "available"
       ? "var(--text)"
@@ -215,13 +221,16 @@ export function Settings({ onClose }: SettingsProps) {
 
   const checkForUpdate = useCallback(async () => {
     setUpdateState({ kind: "checking" });
+    const coreCheck = checkCoreUpdate();
     try {
       const info = await invoke<UpdateInfo | null>("check_for_update");
       setUpdateState(info ? { kind: "available", info } : { kind: "none" });
     } catch (e) {
       setUpdateState({ kind: "error", message: String(e) });
+    } finally {
+      await coreCheck;
     }
-  }, []);
+  }, [checkCoreUpdate]);
 
   const toggleAutoUpdate = (enabled: boolean) => {
     setAutoUpdate(enabled);
@@ -471,7 +480,7 @@ export function Settings({ onClose }: SettingsProps) {
       })
       .catch(() => {
         showHotkeyFeedback(
-          "Could not register hotkey — try a different combination",
+          "Could not register hotkey - try a different combination",
           false,
         );
         invoke("resume_hotkey")
@@ -493,7 +502,7 @@ export function Settings({ onClose }: SettingsProps) {
     if (platform.backend === "wlr") {
       return (
         <p className="text-xs" style={{ color: "var(--muted)" }}>
-          wlroots Wayland — native support active
+          wlroots Wayland - native support active
         </p>
       );
     }
@@ -501,7 +510,7 @@ export function Settings({ onClose }: SettingsProps) {
       return (
         <div className="flex flex-col gap-1">
           <p className="text-xs" style={{ color: "var(--muted)" }}>
-            GNOME Wayland — using Clipboard History extension
+            GNOME Wayland - using Clipboard History extension
           </p>
           <p className="text-xs" style={{ color: "var(--muted)" }}>
             Status:{" "}
@@ -534,14 +543,14 @@ export function Settings({ onClose }: SettingsProps) {
     ) {
       return (
         <p className="text-xs" style={{ color: "var(--muted)" }}>
-          Wayland session detected — using XWayland fallback (set
+          Wayland session detected - using XWayland fallback (set
           GDK_BACKEND=x11)
         </p>
       );
     }
     return (
       <p className="text-xs" style={{ color: "var(--muted)" }}>
-        {platform.session_type.toUpperCase()} — using Arboard polling backend
+        {platform.session_type.toUpperCase()} - using Arboard polling backend
       </p>
     );
   };
@@ -603,7 +612,7 @@ export function Settings({ onClose }: SettingsProps) {
         <Section title="Clipboard">
           <div className="flex flex-col gap-2">
             <p className="text-xs" style={{ color: "var(--muted)" }}>
-              Excluded apps — clips from these source apps will be ignored.
+              Excluded apps - clips from these source apps will be ignored.
             </p>
             <div className="flex flex-wrap gap-1">
               {excluded.length === 0 && (
@@ -759,7 +768,20 @@ export function Settings({ onClose }: SettingsProps) {
 
         <Section title="Keyboard">
           <Row label="Global hotkey">
-            <input
+            {shortcut.info?.wayland ? (
+              <div className="flex flex-col items-end gap-2">
+                <span className="text-xs">{shortcut.info.trigger ?? "Shortcut not active"}</span>
+                <button
+                  type="button"
+                  disabled={shortcut.busy}
+                  onClick={() => { void shortcut.configure(); }}
+                  className="rounded px-2 py-1 text-xs"
+                  style={{ backgroundColor: "var(--surface)", color: "var(--text)" }}
+                >
+                  {shortcut.busy ? "Waiting for desktop..." : "Configure shortcut"}
+                </button>
+              </div>
+            ) : <input
               type="text"
               value={
                 recordingHotkey
@@ -767,6 +789,7 @@ export function Settings({ onClose }: SettingsProps) {
                   : formatHotkey(hotkey, isMac)
               }
               readOnly
+              disabled={shortcut.info === null}
               onFocus={startRecording}
               onBlur={() => {
                 if (recordingHotkey) stopRecording();
@@ -781,7 +804,7 @@ export function Settings({ onClose }: SettingsProps) {
                 }`,
                 width: "200px",
               }}
-            />
+            />}
           </Row>
           {hotkeyFeedback && (
             <p
@@ -793,17 +816,20 @@ export function Settings({ onClose }: SettingsProps) {
               {hotkeyFeedback.msg}
             </p>
           )}
-          {!hotkeyActive && (
+          {!shortcut.info?.wayland && !hotkeyActive && (
             <p style={{ color: "var(--warning)", fontSize: 12 }}>
               Hotkey inactive. The combination is most likely already claimed by
               the system or another application. Try a different one.
             </p>
           )}
-          {(platform?.backend === "gch" ||
-            platform?.session_type === "wayland") && (
+          {shortcut.info?.wayland && (
             <p className="text-xs" style={{ color: "var(--muted)" }}>
-              Global hotkeys may not work on GNOME Wayland. Use the tray icon
-              to open the panel if the hotkey is unresponsive.
+              Your desktop manages this shortcut and may ask for permission.
+            </p>
+          )}
+          {(shortcut.error || shortcut.info?.error) && (
+            <p className="text-xs" style={{ color: "var(--danger)" }}>
+              {shortcut.error || shortcut.info?.error}
             </p>
           )}
         </Section>
@@ -888,7 +914,9 @@ export function Settings({ onClose }: SettingsProps) {
               </p>
             )}
 
-            <label className="flex items-center gap-2 cursor-pointer">
+            <CoreUpdateNotice status={coreUpdate.status} checking={coreUpdate.checking} error={coreUpdate.error} />
+
+                <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
                 checked={autoUpdate}

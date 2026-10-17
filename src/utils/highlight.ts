@@ -11,7 +11,7 @@ export function buildHighlightSegments(
 ): Segment[] {
   const chars = Array.from(content);
   const truncated = chars.slice(0, DISPLAY_LIMIT);
-  const ellipsis = chars.length > DISPLAY_LIMIT ? "…" : "";
+  const ellipsis = chars.length > DISPLAY_LIMIT ? "..." : "";
 
   if (positions.length === 0) {
     return [{ text: truncated.join("") + ellipsis, highlighted: false }];

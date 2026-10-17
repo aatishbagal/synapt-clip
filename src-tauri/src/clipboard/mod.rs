@@ -12,7 +12,7 @@ pub use watcher::{ClipboardWatcher, NewClip, WatcherError};
 use crate::platform::ClipboardBackend;
 use tokio::sync::mpsc;
 
-/// A watcher that does nothing — used for backends that require user setup
+/// A watcher that does nothing - used for backends that require user setup
 /// (GCH not installed/enabled) or unsupported sessions. The setup state is
 /// surfaced to the frontend separately via `backend-status` events.
 struct NoopWatcher;

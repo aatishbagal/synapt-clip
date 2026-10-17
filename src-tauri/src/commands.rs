@@ -386,6 +386,12 @@ pub async fn set_setting(
     key: String,
     value: String,
 ) -> Result<(), String> {
+    if key == "hotkey" {
+        if crate::hotkey::uses_portal() {
+            return Err("Change this shortcut through desktop shortcut settings".into());
+        }
+        crate::hotkey::register_hotkey(&app, &value).await?;
+    }
     state
         .db
         .set_setting(&key, &value)
@@ -419,14 +425,7 @@ pub async fn set_setting(
             let _ = app.emit("settings:theme_changed", &value);
         }
         "hotkey" => {
-            match crate::hotkey::register_hotkey(&app, &value) {
-                Ok(()) => {
-                    let _ = app.emit("settings:hotkey_changed", &value);
-                }
-                Err(e) => {
-                    return Err(e);
-                }
-            }
+            let _ = app.emit("settings:hotkey_changed", &value);
         }
         _ => {}
     }
@@ -495,7 +494,7 @@ pub async fn resume_hotkey(
         .await
         .map_err(|e| e.to_string())?
         .unwrap_or_else(|| crate::hotkey::DEFAULT_HOTKEY.to_string());
-    crate::hotkey::register_hotkey(&app, &hotkey)
+    crate::hotkey::register_hotkey(&app, &hotkey).await
 }
 
 /// Report whether the configured global hotkey is currently registered with the OS.
@@ -581,6 +580,32 @@ pub fn get_app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
+// Keep startup results available when Settings opens after the event was emitted.
+static CORE_UPDATE_STATUS: std::sync::Mutex<Option<synapt_core::updates::CoreUpdateStatus>> =
+    std::sync::Mutex::new(None);
+
+/// Return bundled core compatibility and the last remote check, if any.
+#[tauri::command]
+pub fn get_core_update_status() -> synapt_core::updates::CoreUpdateStatus {
+    CORE_UPDATE_STATUS.lock().ok().and_then(|status| status.clone()).unwrap_or_else(|| {
+        synapt_core::updates::bundled_status(
+            env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), env!("SYNAPT_CORE_REQUIREMENT"),
+        )
+    })
+}
+
+/// Check core releases separately from app updates, preserving app-update availability on failure.
+#[tauri::command]
+pub async fn check_core_update() -> synapt_core::updates::CoreUpdateStatus {
+    let status = synapt_core::updates::check_for_update(
+        env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), env!("SYNAPT_CORE_REQUIREMENT"),
+    ).await;
+    if let Ok(mut cached) = CORE_UPDATE_STATUS.lock() {
+        *cached = Some(status.clone());
+    }
+    status
+}
+
 /// Whether automatic update checks are enabled. Defaults to true when unset.
 pub async fn auto_update_enabled(db: &crate::storage::Db) -> bool {
     db.get_setting("auto_update_check").await.ok().flatten().as_deref() != Some("false")
@@ -595,7 +620,14 @@ pub async fn run_auto_update_check(app: &AppHandle, db: &crate::storage::Db) {
         tracing::debug!("automatic update check is disabled");
         return;
     }
-    match check_for_update(app.clone()).await {
+    let (app_update, core_update) = tokio::join!(check_for_update(app.clone()), check_core_update());
+    if let Some(error) = &core_update.check_error {
+        tracing::warn!("core update check failed: {error}");
+    }
+    if let Err(error) = app.emit("core-update-status", &core_update) {
+        tracing::warn!("could not emit core-update-status: {error}");
+    }
+    match app_update {
         Ok(Some(info)) => {
             tracing::info!("update available: v{}", info.version);
             if let Err(e) = app.emit("update-available", &info) {
@@ -799,6 +831,23 @@ pub async fn refresh_bridge_peers(
     }
     let body: R = resp.json().await.map_err(|e| e.to_string())?;
     Ok(body.peers)
+}
+
+/// Return the effective shortcut binding and any backend failure.
+#[tauri::command]
+pub fn get_hotkey_info(app: tauri::AppHandle) -> crate::hotkey::HotkeyInfo {
+    crate::hotkey::info(&app)
+}
+
+/// Configure a Wayland shortcut through the desktop's consent interface.
+#[tauri::command]
+pub async fn configure_hotkey(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<(), String> {
+    let hotkey = state.db.get_setting("hotkey").await.map_err(|e| e.to_string())?
+        .unwrap_or_else(|| crate::hotkey::DEFAULT_HOTKEY.to_string());
+    crate::hotkey::configure(&app, &hotkey).await
 }
 
 #[cfg(test)]

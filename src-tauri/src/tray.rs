@@ -8,7 +8,7 @@ const TRAY_ID: &str = "main";
 /// The bridge portion is appended only when Synapt is connected.
 pub fn tray_tooltip(clip_count: usize, bridge_active: bool, peer_count: usize) -> String {
     let clips = if clip_count == 1 { "clip" } else { "clips" };
-    let mut tooltip = format!("SynaptClip — {clip_count} {clips}");
+    let mut tooltip = format!("SynaptClip - {clip_count} {clips}");
 
     if bridge_active {
         if peer_count > 0 {
@@ -41,16 +41,16 @@ mod tests {
 
     #[test]
     fn inactive_shows_only_clip_count() {
-        assert_eq!(tray_tooltip(0, false, 0), "SynaptClip — 0 clips");
-        assert_eq!(tray_tooltip(1, false, 3), "SynaptClip — 1 clip");
-        assert_eq!(tray_tooltip(12, false, 0), "SynaptClip — 12 clips");
+        assert_eq!(tray_tooltip(0, false, 0), "SynaptClip - 0 clips");
+        assert_eq!(tray_tooltip(1, false, 3), "SynaptClip - 1 clip");
+        assert_eq!(tray_tooltip(12, false, 0), "SynaptClip - 12 clips");
     }
 
     #[test]
     fn active_no_peers_appends_connected() {
         assert_eq!(
             tray_tooltip(5, true, 0),
-            "SynaptClip — 5 clips, Synapt connected"
+            "SynaptClip - 5 clips, Synapt connected"
         );
     }
 
@@ -58,7 +58,7 @@ mod tests {
     fn active_one_peer_is_singular() {
         assert_eq!(
             tray_tooltip(5, true, 1),
-            "SynaptClip — 5 clips, Synapt connected (1 device)"
+            "SynaptClip - 5 clips, Synapt connected (1 device)"
         );
     }
 
@@ -66,7 +66,7 @@ mod tests {
     fn active_multiple_peers_is_plural() {
         assert_eq!(
             tray_tooltip(5, true, 2),
-            "SynaptClip — 5 clips, Synapt connected (2 devices)"
+            "SynaptClip - 5 clips, Synapt connected (2 devices)"
         );
     }
 }

@@ -2,7 +2,7 @@
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClipboardBackend {
-    /// X11, XWayland, and Windows — uses arboard crate for polling.
+    /// X11, XWayland, and Windows - uses arboard crate for polling.
     Arboard,
     /// Wayland with wlroots compositors (Sway, Hyprland) via wl-paste.
     WlrDataControl,
@@ -20,13 +20,13 @@ pub enum ClipboardBackend {
 pub fn detect_backend() -> ClipboardBackend {
     #[cfg(target_os = "windows")]
     {
-        tracing::info!("platform: Windows — using arboard backend");
+        tracing::info!("platform: Windows - using arboard backend");
         return ClipboardBackend::Arboard;
     }
 
     #[cfg(target_os = "macos")]
     {
-        tracing::info!("platform: macOS — using arboard backend");
+        tracing::info!("platform: macOS - using arboard backend");
         ClipboardBackend::Arboard
     }
 
@@ -34,7 +34,7 @@ pub fn detect_backend() -> ClipboardBackend {
     {
         // Explicit developer override: force XWayland/X11 arboard backend.
         if std::env::var("GDK_BACKEND").as_deref() == Ok("x11") {
-            tracing::info!("platform: GDK_BACKEND=x11 set — using arboard via XWayland");
+            tracing::info!("platform: GDK_BACKEND=x11 set - using arboard via XWayland");
             return ClipboardBackend::Arboard;
         }
 
@@ -57,9 +57,9 @@ pub fn detect_backend() -> ClipboardBackend {
             // wlroots compositors (Sway, Hyprland) expose wlr/ext-data-control.
             // GNOME Mutter is handled via the Clipboard History extension: recent
             // Mutter answers wl-paste, so probing it would wrongly pick the wlr
-            // backend on GNOME — hence GNOME is routed to GCH explicitly.
+            // backend on GNOME - hence GNOME is routed to GCH explicitly.
             if !is_gnome && probe_wlr_data_control(wayland_display.as_deref()) {
-                tracing::info!("platform: Wayland wlroots detected — using wl-paste backend");
+                tracing::info!("platform: Wayland wlroots detected - using wl-paste backend");
                 return ClipboardBackend::WlrDataControl;
             }
 
@@ -69,7 +69,7 @@ pub fn detect_backend() -> ClipboardBackend {
                 if gch.installed && gch.enabled {
                     // Use the file backend when enabled; the watcher polls for
                     // the database if it has not been written yet.
-                    tracing::info!("platform: GNOME Wayland with GCH extension — using GCH file watcher");
+                    tracing::info!("platform: GNOME Wayland with GCH extension - using GCH file watcher");
                     return ClipboardBackend::GchFile;
                 }
                 if gch.installed && !gch.enabled {
@@ -79,7 +79,7 @@ pub fn detect_backend() -> ClipboardBackend {
                 // Not installed: fall back to XWayland arboard if available.
                 if x11_display.is_some() {
                     tracing::warn!(
-                        "platform: GNOME Wayland, GCH not installed — falling back to XWayland arboard"
+                        "platform: GNOME Wayland, GCH not installed - falling back to XWayland arboard"
                     );
                     return ClipboardBackend::Arboard;
                 }
@@ -89,7 +89,7 @@ pub fn detect_backend() -> ClipboardBackend {
 
             // Non-GNOME Wayland without wlr support: try XWayland arboard.
             if x11_display.is_some() {
-                tracing::warn!("platform: Wayland with no wlr support — falling back to XWayland arboard");
+                tracing::warn!("platform: Wayland with no wlr support - falling back to XWayland arboard");
                 return ClipboardBackend::Arboard;
             }
 
@@ -98,11 +98,11 @@ pub fn detect_backend() -> ClipboardBackend {
         }
 
         if is_x11 {
-            tracing::info!("platform: X11 detected — using arboard backend");
+            tracing::info!("platform: X11 detected - using arboard backend");
             return ClipboardBackend::Arboard;
         }
 
-        tracing::warn!("platform: no display server detected — using arboard backend");
+        tracing::warn!("platform: no display server detected - using arboard backend");
         ClipboardBackend::Arboard
     }
 
@@ -193,11 +193,11 @@ pub fn get_backend_status() -> BackendStatusInfo {
         ),
         ClipboardBackend::WlrDataControl => (
             "wlr",
-            "wlroots Wayland — native wl-paste backend active.".to_string(),
+            "wlroots Wayland - native wl-paste backend active.".to_string(),
         ),
         ClipboardBackend::GchFile => (
             "gch",
-            "GNOME Wayland — using the Clipboard History extension.".to_string(),
+            "GNOME Wayland - using the Clipboard History extension.".to_string(),
         ),
         ClipboardBackend::GchNotEnabled => (
             "gch",

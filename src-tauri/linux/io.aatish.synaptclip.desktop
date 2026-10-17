@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=SynaptClip
+Exec=synapt-clip
+Icon=synapt-clip
+Terminal=false
+NoDisplay=true
+Categories=Utility;

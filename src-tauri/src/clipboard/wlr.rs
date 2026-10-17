@@ -94,7 +94,7 @@ impl ClipboardWatcher for WlrWatcher {
     async fn watch(&self, tx: mpsc::Sender<NewClip>) -> Result<(), WatcherError> {
         if !binary_available(&self.wl_paste_path).await {
             return Err(WatcherError::NotFound(
-                "wl-paste not found — install wl-clipboard package".to_string(),
+                "wl-paste not found - install wl-clipboard package".to_string(),
             ));
         }
 

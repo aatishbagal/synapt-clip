@@ -318,7 +318,7 @@ mod tests {
 
     #[test]
     fn roundtrip_unicode() {
-        let text = "café 日本語 emoji-free text";
+        let text = "caf\u{e9} \u{65e5}\u{672c}\u{8a9e} emoji-free text";
         let encoded = encode(text).expect("encodes");
         let decoded = decode(&encoded).expect("decodes");
         assert_eq!(decoded, text);
