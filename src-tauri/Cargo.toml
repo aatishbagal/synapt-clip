@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 regex = "1"
 tauri = { version = "2", features = ["tray-icon"] }
-synapt-core = { path = "../../synapt-core", version = "=0.2.0", features = ["updates"] }
+synapt-core = { path = "../../synapt-core", version = "=0.2.1", features = ["updates"] }
 tauri-plugin-shell = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-updater = "2"
@@ -27,7 +27,7 @@ notify = "6"
 rand = "0.8"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-synapt-core = { path = "../../synapt-core", version = "=0.2.0", features = ["updates", "portal-hotkey"] }
+synapt-core = { path = "../../synapt-core", version = "=0.2.1", features = ["updates", "portal-hotkey"] }
 gtk = "0.18"
 
 [target.'cfg(target_os = "macos")'.dependencies]
