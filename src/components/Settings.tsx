@@ -1,3 +1,5 @@
+import { useCoreUpdate } from '../hooks/useCoreUpdate';
+import { CoreUpdateNotice } from './CoreUpdateNotice';
 import { useHotkeyInfo } from "../hooks/useHotkeyInfo";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -202,12 +204,14 @@ export function Settings({ onClose }: SettingsProps) {
   // a healthy install.
   const [crashLogPath, setCrashLogPath] = useState<string | null>(null);
 
+  const coreUpdate = useCoreUpdate();
+  const checkCoreUpdate = coreUpdate.check;
   const [appVersion, setAppVersion] = useState("");
   const [updateState, setUpdateState] = useState<UpdateState>({ kind: "idle" });
   const [autoUpdate, setAutoUpdate] = useState(true);
 
   const updateBusy =
-    updateState.kind === "checking" || updateState.kind === "installing";
+    coreUpdate.checking || updateState.kind === "checking" || updateState.kind === "installing";
   const updateTone =
     updateState.kind === "available"
       ? "var(--text)"
@@ -217,13 +221,16 @@ export function Settings({ onClose }: SettingsProps) {
 
   const checkForUpdate = useCallback(async () => {
     setUpdateState({ kind: "checking" });
+    const coreCheck = checkCoreUpdate();
     try {
       const info = await invoke<UpdateInfo | null>("check_for_update");
       setUpdateState(info ? { kind: "available", info } : { kind: "none" });
     } catch (e) {
       setUpdateState({ kind: "error", message: String(e) });
+    } finally {
+      await coreCheck;
     }
-  }, []);
+  }, [checkCoreUpdate]);
 
   const toggleAutoUpdate = (enabled: boolean) => {
     setAutoUpdate(enabled);
@@ -907,7 +914,9 @@ export function Settings({ onClose }: SettingsProps) {
               </p>
             )}
 
-            <label className="flex items-center gap-2 cursor-pointer">
+            <CoreUpdateNotice status={coreUpdate.status} checking={coreUpdate.checking} error={coreUpdate.error} />
+
+                <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
                 checked={autoUpdate}
