@@ -386,6 +386,12 @@ pub async fn set_setting(
     key: String,
     value: String,
 ) -> Result<(), String> {
+    if key == "hotkey" {
+        if crate::hotkey::uses_portal() {
+            return Err("Change this shortcut through desktop shortcut settings".into());
+        }
+        crate::hotkey::register_hotkey(&app, &value).await?;
+    }
     state
         .db
         .set_setting(&key, &value)
@@ -419,14 +425,7 @@ pub async fn set_setting(
             let _ = app.emit("settings:theme_changed", &value);
         }
         "hotkey" => {
-            match crate::hotkey::register_hotkey(&app, &value) {
-                Ok(()) => {
-                    let _ = app.emit("settings:hotkey_changed", &value);
-                }
-                Err(e) => {
-                    return Err(e);
-                }
-            }
+            let _ = app.emit("settings:hotkey_changed", &value);
         }
         _ => {}
     }
@@ -495,7 +494,7 @@ pub async fn resume_hotkey(
         .await
         .map_err(|e| e.to_string())?
         .unwrap_or_else(|| crate::hotkey::DEFAULT_HOTKEY.to_string());
-    crate::hotkey::register_hotkey(&app, &hotkey)
+    crate::hotkey::register_hotkey(&app, &hotkey).await
 }
 
 /// Report whether the configured global hotkey is currently registered with the OS.
@@ -799,6 +798,23 @@ pub async fn refresh_bridge_peers(
     }
     let body: R = resp.json().await.map_err(|e| e.to_string())?;
     Ok(body.peers)
+}
+
+/// Return the effective shortcut binding and any backend failure.
+#[tauri::command]
+pub fn get_hotkey_info(app: tauri::AppHandle) -> crate::hotkey::HotkeyInfo {
+    crate::hotkey::info(&app)
+}
+
+/// Configure a Wayland shortcut through the desktop's consent interface.
+#[tauri::command]
+pub async fn configure_hotkey(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<(), String> {
+    let hotkey = state.db.get_setting("hotkey").await.map_err(|e| e.to_string())?
+        .unwrap_or_else(|| crate::hotkey::DEFAULT_HOTKEY.to_string());
+    crate::hotkey::configure(&app, &hotkey).await
 }
 
 #[cfg(test)]

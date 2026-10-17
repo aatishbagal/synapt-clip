@@ -201,9 +201,14 @@ pub fn run() {
     let bridge_state: crate::synapt::bridge::SharedBridgeState =
         Arc::new(RwLock::new(crate::synapt::bridge::BridgeState::inactive()));
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    let builder = if hotkey::uses_portal() {
+        builder
+    } else {
+        builder.plugin(tauri_plugin_global_shortcut::Builder::new().build())
+    };
+    builder
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState {
             db: db.clone(),
@@ -274,10 +279,12 @@ pub fn run() {
                 });
             }
 
-            match hotkey::register_hotkey(app.handle(), &startup_hotkey) {
-                Ok(()) => tracing::info!("Hotkey registered: {startup_hotkey}"),
-                Err(e) => tracing::warn!("Hotkey registration failed: {e}"),
-            }
+            let hotkey_app = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(error) = hotkey::register_hotkey(&hotkey_app, &startup_hotkey).await {
+                    tracing::warn!("hotkey: registration failed: {error}");
+                }
+            });
 
             let backend = platform::detect_backend();
             tracing::info!("Detected clipboard backend: {:?}", backend);
@@ -498,6 +505,8 @@ pub fn run() {
             commands::set_setting,
             commands::get_platform_info,
             commands::get_hotkey_status,
+            commands::get_hotkey_info,
+            commands::configure_hotkey,
             commands::pause_hotkey,
             commands::resume_hotkey,
             clipboard::gch::get_gch_status,

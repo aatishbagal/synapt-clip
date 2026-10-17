@@ -1,3 +1,4 @@
+import { useHotkeyInfo } from "../hooks/useHotkeyInfo";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -179,6 +180,7 @@ export function Settings({ onClose }: SettingsProps) {
   const [expiryDays, setExpiryDays] = useState("0");
   const [theme, setTheme] = useState<Theme>("dark");
   const [hotkey, setHotkey] = useState("Super+Shift+V");
+  const shortcut = useHotkeyInfo();
   const [excluded, setExcluded] = useState<string[]>([]);
   const [excludedInput, setExcludedInput] = useState("");
   const [platform, setPlatform] = useState<PlatformInfo | null>(null);
@@ -759,7 +761,20 @@ export function Settings({ onClose }: SettingsProps) {
 
         <Section title="Keyboard">
           <Row label="Global hotkey">
-            <input
+            {shortcut.info?.wayland ? (
+              <div className="flex flex-col items-end gap-2">
+                <span className="text-xs">{shortcut.info.trigger ?? "Shortcut not active"}</span>
+                <button
+                  type="button"
+                  disabled={shortcut.busy}
+                  onClick={() => { void shortcut.configure(); }}
+                  className="rounded px-2 py-1 text-xs"
+                  style={{ backgroundColor: "var(--surface)", color: "var(--text)" }}
+                >
+                  {shortcut.busy ? "Waiting for desktop..." : "Configure shortcut"}
+                </button>
+              </div>
+            ) : <input
               type="text"
               value={
                 recordingHotkey
@@ -767,6 +782,7 @@ export function Settings({ onClose }: SettingsProps) {
                   : formatHotkey(hotkey, isMac)
               }
               readOnly
+              disabled={shortcut.info === null}
               onFocus={startRecording}
               onBlur={() => {
                 if (recordingHotkey) stopRecording();
@@ -781,7 +797,7 @@ export function Settings({ onClose }: SettingsProps) {
                 }`,
                 width: "200px",
               }}
-            />
+            />}
           </Row>
           {hotkeyFeedback && (
             <p
@@ -793,17 +809,20 @@ export function Settings({ onClose }: SettingsProps) {
               {hotkeyFeedback.msg}
             </p>
           )}
-          {!hotkeyActive && (
+          {!shortcut.info?.wayland && !hotkeyActive && (
             <p style={{ color: "var(--warning)", fontSize: 12 }}>
               Hotkey inactive. The combination is most likely already claimed by
               the system or another application. Try a different one.
             </p>
           )}
-          {(platform?.backend === "gch" ||
-            platform?.session_type === "wayland") && (
+          {shortcut.info?.wayland && (
             <p className="text-xs" style={{ color: "var(--muted)" }}>
-              Global hotkeys may not work on GNOME Wayland. Use the tray icon
-              to open the panel if the hotkey is unresponsive.
+              Your desktop manages this shortcut and may ask for permission.
+            </p>
+          )}
+          {(shortcut.error || shortcut.info?.error) && (
+            <p className="text-xs" style={{ color: "var(--danger)" }}>
+              {shortcut.error || shortcut.info?.error}
             </p>
           )}
         </Section>

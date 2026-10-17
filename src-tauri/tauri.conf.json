@@ -51,6 +51,18 @@
   },
   "bundle": {
     "active": true,
+    "linux": {
+      "deb": {
+        "files": {
+          "/usr/share/applications/io.aatish.synaptclip.desktop": "linux/io.aatish.synaptclip.desktop"
+        }
+      },
+      "rpm": {
+        "files": {
+          "/usr/share/applications/io.aatish.synaptclip.desktop": "linux/io.aatish.synaptclip.desktop"
+        }
+      }
+    },
     "createUpdaterArtifacts": true,
     "targets": "all",
     "publisher": "Aatish Bagal",

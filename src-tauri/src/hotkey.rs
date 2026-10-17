@@ -1,103 +1,193 @@
-use std::sync::{Mutex, OnceLock};
+//! Select a desktop portal on Wayland and the native shortcut plugin elsewhere.
 
+use serde::Serialize;
+use std::sync::{Mutex, OnceLock};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
-/// Hotkey used when no preference has been stored yet. Kept here so startup
-/// registration and the recorder's resume path cannot drift apart.
+/// Default shortcut used before a preference has been saved.
 pub const DEFAULT_HOTKEY: &str = "Super+Shift+V";
 
-/// Shortcut string that was last registered successfully, so the frontend can
-/// tell whether the global hotkey is actually live.
+/// Shortcut state shown in Settings, including the desktop's actual binding.
+#[derive(Serialize)]
+pub struct HotkeyInfo {
+    /// Whether shortcuts are managed by the Wayland desktop.
+    pub wayland: bool,
+    /// Whether a live binding has been granted.
+    pub registered: bool,
+    /// The actual trigger description, when available.
+    pub trigger: Option<String>,
+    /// A registration or session error suitable for display.
+    pub error: Option<String>,
+}
+
 fn registered_shortcut() -> &'static Mutex<Option<String>> {
     static REGISTERED: OnceLock<Mutex<Option<String>>> = OnceLock::new();
     REGISTERED.get_or_init(|| Mutex::new(None))
 }
 
-fn set_registered(value: Option<String>) {
-    match registered_shortcut().lock() {
-        Ok(mut guard) => *guard = value,
-        Err(poisoned) => *poisoned.into_inner() = value,
-    }
+fn registration_error() -> &'static Mutex<Option<String>> {
+    static ERROR: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+    ERROR.get_or_init(|| Mutex::new(None))
 }
 
-fn current_registered() -> Option<String> {
-    match registered_shortcut().lock() {
-        Ok(guard) => guard.clone(),
-        Err(poisoned) => poisoned.into_inner().clone(),
-    }
+#[cfg(target_os = "linux")]
+fn portal() -> &'static synapt_core::portal_hotkey::PortalHotkey {
+    static PORTAL: OnceLock<synapt_core::portal_hotkey::PortalHotkey> = OnceLock::new();
+    PORTAL.get_or_init(Default::default)
 }
 
-/// Register `hotkey_str` as the global shortcut that shows the clip panel,
-/// replacing any shortcut registered earlier.
-///
-/// Modifier names are parsed case-insensitively by the global shortcut plugin.
-/// `Super`, `Cmd` and `Command` all mean the Command key on macOS and the
-/// Windows key elsewhere; `Alt` and `Option` are interchangeable.
-pub fn register_hotkey(app: &AppHandle, hotkey_str: &str) -> Result<(), String> {
-    let trimmed = hotkey_str.trim();
-    if trimmed.is_empty() {
-        return Ok(());
-    }
+/// Detect Wayland independently of the presence of an XWayland DISPLAY.
+pub fn uses_portal() -> bool {
+    #[cfg(target_os = "linux")]
+    return synapt_core::portal_hotkey::is_wayland_session(
+        std::env::var("XDG_SESSION_TYPE").ok().as_deref(),
+        std::env::var("WAYLAND_DISPLAY").ok().as_deref(),
+    );
+    #[cfg(not(target_os = "linux"))]
+    false
+}
 
-    if let Err(e) = app.global_shortcut().unregister_all() {
-        tracing::warn!("Failed to unregister existing shortcuts: {e}");
-    }
-    set_registered(None);
-
-    let app_clone = app.clone();
-    let result = app
-        .global_shortcut()
-        .on_shortcut(trimmed, move |_app, _shortcut, event| {
-            if event.state == ShortcutState::Pressed {
-                if let Some(window) = app_clone.get_webview_window("main") {
-                    let _ = window.center();
-                    let _ = window.show();
-                    let _ = window.set_focus();
+fn activate(app: &AppHandle, token: Option<String>, timestamp: u32) {
+    let handle = app.clone();
+    if let Err(error) = app.run_on_main_thread(move || {
+        if let Some(window) = handle.get_webview_window("main") {
+            let _ = window.center();
+            #[cfg(target_os = "linux")]
+            if uses_portal() {
+                use gtk::prelude::*;
+                if let Ok(gtk_window) = window.gtk_window() {
+                    if let Some(token) = token.as_deref() {
+                        gtk_window.set_startup_id(token);
+                    }
+                    gtk_window.present_with_time(timestamp);
+                    return;
                 }
             }
-        });
-
-    match result {
-        Ok(()) => {
-            set_registered(Some(trimmed.to_string()));
-            Ok(())
+            #[cfg(not(target_os = "linux"))]
+            let _ = (token, timestamp);
+            let _ = window.show();
+            let _ = window.set_focus();
         }
-        Err(e) => {
-            // On macOS the OS refuses combinations already owned by the system
-            // or another application (Command+Space belongs to Spotlight, for
-            // example). On Windows the same shows up as ERROR_HOTKEY_ALREADY_REGISTERED.
-            tracing::warn!(
-                "hotkey: failed to register '{trimmed}': {e}. \
-                 The combination is most likely already claimed by the system or another application"
-            );
-            Err(format!("Failed to register hotkey '{trimmed}': {e}"))
-        }
+    }) {
+        tracing::warn!("hotkey: could not present window: {error}");
     }
 }
 
-/// Release the global shortcut without forgetting the user's preference.
-///
-/// The hotkey recorder needs this on Windows: `RegisterHotKey` claims the
-/// combination at the OS message loop, so pressing the current hotkey while the
-/// recorder is open fires the show-panel action instead of reaching the webview,
-/// and `preventDefault` in JavaScript never gets the chance to run. macOS taps
-/// events at a level that does not intercept them this way, which is why only
-/// Windows shows the bug. Call `register_hotkey` again to restore the shortcut.
-pub fn unregister_hotkey(app: &AppHandle) -> Result<(), String> {
+/// Register the saved shortcut through the backend appropriate to this session.
+pub async fn register_hotkey(app: &AppHandle, hotkey: &str) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    if uses_portal() {
+        let handle = app.clone();
+        let result = portal()
+            .register(
+                &app.config().identifier,
+                "Open SynaptClip",
+                hotkey,
+                move |event| {
+                    activate(&handle, event.token, event.timestamp);
+                },
+            )
+            .await;
+        if result.is_ok() {
+            tracing::info!(
+                "hotkey: Wayland portal binding active: {:?}",
+                portal().status().trigger
+            );
+        }
+        return result;
+    }
+    let result = register_native(app, hotkey);
+    *registration_error()
+        .lock()
+        .unwrap_or_else(|p| p.into_inner()) = result.as_ref().err().cloned();
+    result
+}
+
+fn register_native(app: &AppHandle, hotkey: &str) -> Result<(), String> {
+    let trimmed = hotkey.trim();
+    if trimmed.is_empty() {
+        return Err("The shortcut cannot be empty".into());
+    }
+    // Validate before releasing the current binding.
+    let shortcut: tauri_plugin_global_shortcut::Shortcut = trimmed
+        .parse()
+        .map_err(|e| format!("Invalid shortcut: {e}"))?;
+    unregister_hotkey(app)?;
     app.global_shortcut()
-        .unregister_all()
-        .map_err(|e| format!("Failed to release the global hotkey: {e}"))?;
-    set_registered(None);
+        .on_shortcut(shortcut, |app, _, event| {
+            if event.state == ShortcutState::Pressed {
+                activate(app, None, 0);
+            }
+        })
+        .map_err(|e| format!("Could not register shortcut: {e}"))?;
+    *registered_shortcut()
+        .lock()
+        .unwrap_or_else(|p| p.into_inner()) = Some(trimmed.to_string());
+    tracing::info!("hotkey: native binding active: {trimmed}");
     Ok(())
 }
 
-/// Report whether the configured global hotkey is currently registered with the OS.
-pub fn is_hotkey_registered(app: &AppHandle) -> bool {
-    match current_registered() {
-        Some(shortcut) => app.global_shortcut().is_registered(shortcut.as_str()),
-        None => false,
+/// Release the native shortcut while the key recorder is active.
+pub fn unregister_hotkey(app: &AppHandle) -> Result<(), String> {
+    if uses_portal() {
+        return Err("Use desktop shortcut settings to change the Wayland binding".into());
     }
+    app.global_shortcut()
+        .unregister_all()
+        .map_err(|e| e.to_string())?;
+    *registered_shortcut()
+        .lock()
+        .unwrap_or_else(|p| p.into_inner()) = None;
+    Ok(())
+}
+
+/// Return the state of the active backend without opening a consent dialog.
+pub fn info(app: &AppHandle) -> HotkeyInfo {
+    #[cfg(target_os = "linux")]
+    if uses_portal() {
+        let state = portal().status();
+        return HotkeyInfo {
+            wayland: true,
+            registered: state.registered,
+            trigger: state.trigger,
+            error: state.error,
+        };
+    }
+    let shortcut = registered_shortcut()
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .clone();
+    let registered = shortcut
+        .as_deref()
+        .is_some_and(|key| app.global_shortcut().is_registered(key));
+    HotkeyInfo {
+        wayland: false,
+        registered,
+        trigger: shortcut,
+        error: registration_error()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone(),
+    }
+}
+
+/// Report whether the active backend has a live shortcut binding.
+pub fn is_hotkey_registered(app: &AppHandle) -> bool {
+    info(app).registered
+}
+
+/// Open the compositor's editor or retry registration after a portal failure.
+pub async fn configure(app: &AppHandle, hotkey: &str) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    if uses_portal() {
+        if !portal().status().registered {
+            register_hotkey(app, hotkey).await?;
+        }
+        return portal().configure().await;
+    }
+    let _ = (app, hotkey);
+    Err("Desktop shortcut settings are only used on Wayland".into())
 }
 
 #[cfg(test)]
