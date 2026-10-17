@@ -168,7 +168,7 @@ mod tests {
 
     #[test]
     fn unicode_distance() {
-        assert_eq!(levenshtein("café", "cafe"), 1);
-        assert_eq!(levenshtein("日本語", "日本"), 1);
+        assert_eq!(levenshtein("caf\u{e9}", "cafe"), 1);
+        assert_eq!(levenshtein("\u{65e5}\u{672c}\u{8a9e}", "\u{65e5}\u{672c}"), 1);
     }
 }

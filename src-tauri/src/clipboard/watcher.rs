@@ -5,7 +5,7 @@ use tokio::sync::mpsc;
 pub struct NewClip {
     /// The clipboard text content.
     pub content: String,
-    /// Content type — always "text" in v0.1.
+    /// Content type - always "text" in v0.1.
     pub content_type: String,
     /// Source application name, if detectable.
     pub source_app: Option<String>,

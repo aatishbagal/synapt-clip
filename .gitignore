@@ -6,3 +6,4 @@ src-tauri/target/
 *.db-wal
 .env
 .claude/
+.DS_Store

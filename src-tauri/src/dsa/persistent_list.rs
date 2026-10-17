@@ -154,7 +154,7 @@ impl<T: Clone> VersionHistory<T> {
 
     /// Append a new version and advance the cursor to it.
     /// Discards any forward history past the current cursor.
-    /// Caps retained versions at 50 — the oldest is dropped when over.
+    /// Caps retained versions at 50 - the oldest is dropped when over.
     pub fn push(&mut self, version: PersistentList<T>) {
         self.versions.truncate(self.current + 1);
         self.versions.push(version);

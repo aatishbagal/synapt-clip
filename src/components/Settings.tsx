@@ -473,7 +473,7 @@ export function Settings({ onClose }: SettingsProps) {
       })
       .catch(() => {
         showHotkeyFeedback(
-          "Could not register hotkey — try a different combination",
+          "Could not register hotkey - try a different combination",
           false,
         );
         invoke("resume_hotkey")
@@ -495,7 +495,7 @@ export function Settings({ onClose }: SettingsProps) {
     if (platform.backend === "wlr") {
       return (
         <p className="text-xs" style={{ color: "var(--muted)" }}>
-          wlroots Wayland — native support active
+          wlroots Wayland - native support active
         </p>
       );
     }
@@ -503,7 +503,7 @@ export function Settings({ onClose }: SettingsProps) {
       return (
         <div className="flex flex-col gap-1">
           <p className="text-xs" style={{ color: "var(--muted)" }}>
-            GNOME Wayland — using Clipboard History extension
+            GNOME Wayland - using Clipboard History extension
           </p>
           <p className="text-xs" style={{ color: "var(--muted)" }}>
             Status:{" "}
@@ -536,14 +536,14 @@ export function Settings({ onClose }: SettingsProps) {
     ) {
       return (
         <p className="text-xs" style={{ color: "var(--muted)" }}>
-          Wayland session detected — using XWayland fallback (set
+          Wayland session detected - using XWayland fallback (set
           GDK_BACKEND=x11)
         </p>
       );
     }
     return (
       <p className="text-xs" style={{ color: "var(--muted)" }}>
-        {platform.session_type.toUpperCase()} — using Arboard polling backend
+        {platform.session_type.toUpperCase()} - using Arboard polling backend
       </p>
     );
   };
@@ -605,7 +605,7 @@ export function Settings({ onClose }: SettingsProps) {
         <Section title="Clipboard">
           <div className="flex flex-col gap-2">
             <p className="text-xs" style={{ color: "var(--muted)" }}>
-              Excluded apps — clips from these source apps will be ignored.
+              Excluded apps - clips from these source apps will be ignored.
             </p>
             <div className="flex flex-wrap gap-1">
               {excluded.length === 0 && (

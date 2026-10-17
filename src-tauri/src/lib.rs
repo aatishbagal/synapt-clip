@@ -58,7 +58,7 @@ fn bridge_snapshot(state: &crate::synapt::bridge::SharedBridgeState) -> (bool, u
 
 fn set_tray_warning(app: &tauri::AppHandle) {
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        let _ = tray.set_tooltip(Some("SynaptClip — setup required"));
+        let _ = tray.set_tooltip(Some("SynaptClip - setup required"));
     }
 }
 
