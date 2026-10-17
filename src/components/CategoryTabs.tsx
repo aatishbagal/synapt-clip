@@ -81,7 +81,7 @@ export function CategoryTabs({
   return (
     <div className="shrink-0" style={{ backgroundColor: TAB_BG }}>
       <div
-        className="flex items-center overflow-x-auto"
+        className="category-tabs flex items-center overflow-x-auto"
         style={{ borderBottom: `1px solid ${BORDER}` }}
       >
         {BASE_TABS.map((t) => renderTab(t.id, t.label, false, false))}

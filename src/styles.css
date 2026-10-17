@@ -69,6 +69,38 @@ body {
     "Helvetica Neue", Arial, sans-serif;
 }
 
+/* Thin scrollbar for the horizontal category tab list. */
+.category-tabs {
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+/* Let the WebKit rules control the exact height where supported. */
+@supports selector(::-webkit-scrollbar) {
+  .category-tabs {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+}
+
+.category-tabs::-webkit-scrollbar {
+  height: 2px;
+}
+
+.category-tabs::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.category-tabs::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 1px;
+}
+
+.category-tabs::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
 .panel-root {
   opacity: 0;
   transition: opacity 120ms ease-out;
