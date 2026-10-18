@@ -51,6 +51,9 @@
   },
   "bundle": {
     "active": true,
+    "resources": {
+      "../whatsnew.json": "whatsnew.json"
+    },
     "linux": {
       "deb": {
         "files": {

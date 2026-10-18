@@ -527,6 +527,9 @@ pub fn run() {
             commands::refresh_bridge_peers,
             commands::send_clip_to_peer,
             commands::send_latest_clip_to_peer,
+            commands::get_whats_new,
+            commands::get_last_seen_version,
+            commands::set_last_seen_version,
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
