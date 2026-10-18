@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { MotionConfig } from "motion/react";
 import { Panel } from "./components/Panel";
 import { Settings } from "./components/Settings";
 import { Onboarding } from "./components/Onboarding";
@@ -57,18 +58,22 @@ export function App() {
     );
   };
 
+  // reducedMotion="user" drops transform and layout animation when the OS asks
+  // for reduced motion, leaving only opacity fades.
   return (
-    <div
-      className={visible ? "panel-root panel-visible" : "panel-root"}
-      style={{ width: "100vw", height: "100vh" }}
-    >
-      {isSettings ? (
-        <Settings onClose={handleCloseSettings} />
-      ) : showOnboarding ? (
-        <Onboarding onDone={() => setShowOnboarding(false)} />
-      ) : (
-        <Panel onOpenSettings={handleOpenSettings} />
-      )}
-    </div>
+    <MotionConfig reducedMotion="user">
+      <div
+        className={visible ? "panel-root panel-visible" : "panel-root"}
+        style={{ width: "100vw", height: "100vh" }}
+      >
+        {isSettings ? (
+          <Settings onClose={handleCloseSettings} />
+        ) : showOnboarding ? (
+          <Onboarding onDone={() => setShowOnboarding(false)} />
+        ) : (
+          <Panel onOpenSettings={handleOpenSettings} />
+        )}
+      </div>
+    </MotionConfig>
   );
 }

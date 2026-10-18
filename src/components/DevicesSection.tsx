@@ -1,5 +1,7 @@
 import { useState, useCallback } from "react";
+import { motion } from "motion/react";
 import type { SynaptPeer } from "../types/synapt";
+import { FADE_IN } from "../animations";
 
 interface DevicesSectionProps {
   peers: SynaptPeer[];
@@ -78,7 +80,8 @@ function PeerRow({ peer, onSendLatest }: PeerRowProps) {
 
 export function DevicesSection({ peers, onSendLatest }: DevicesSectionProps) {
   return (
-    <div
+    <motion.div
+      {...FADE_IN}
       className="shrink-0"
       style={{ borderBottom: "1px solid var(--border)" }}
     >
@@ -107,6 +110,6 @@ export function DevicesSection({ peers, onSendLatest }: DevicesSectionProps) {
           ))}
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }

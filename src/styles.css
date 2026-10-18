@@ -137,25 +137,8 @@ body {
   opacity: 1;
 }
 
-/* Incoming-clip notification popup (ClipReceivePopup). */
-@keyframes synapt-receive-in {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: translateY(0);
-  }
-}
-
-@keyframes synapt-receive-out {
-  from {
-    transform: translateY(0);
-  }
-  to {
-    transform: translateY(100%);
-  }
-}
-
+/* Incoming-clip popup (ClipReceivePopup) auto-dismiss countdown. The popup's
+   own slide in and out is a Motion animation. */
 @keyframes synapt-receive-progress {
   from {
     width: 100%;

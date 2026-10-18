@@ -218,10 +218,24 @@ static end frame instead of flickering. Elements marked `data-motion-timer` are 
 because their animation is a functional countdown, not decoration.
 Motion (JS) animations must check reduced motion themselves (`useReducedMotion()`).
 
+Motion presets live in `src/animations.ts` (identical in Synapt and SynaptClip):
+`SPRING`, `SPRING_GENTLE`, `OVERLAY_ENTER`, `PANEL_ENTER`, `RESULT_ITEM(index)`, `FADE_IN`,
+`INLINE_CONFIRM`, `ITEM_EXIT`. Import from there; do not define one-off springs in components.
+
+The window is shown and hidden from Rust, never unmounted, so the root entrance is
+replayed on every window focus by `useEntranceOnShow` (`src/hooks/useEntranceOnShow.ts`)
+through animation controls rather than by re-mounting. App roots are wrapped in
+`<MotionConfig reducedMotion="user">`, which drops transform animation under reduced
+motion; height animation (`INLINE_CONFIRM`) checks `useReducedMotion()` itself.
+
 Currently in use:
 
-- Panel fade-in: `opacity 120ms ease-out` (`.panel-root`)
-- Receive popup: slide in `200ms ease-out`, slide out `150ms ease-in`
+- Panel root: `PANEL_ENTER`, replayed on focus
+- Clip rows (history and search results): `RESULT_ITEM`, stagger capped at the first 8 rows, `ITEM_EXIT` on removal; the history list remounts per tab
+- Receive popup: slides up from `translateY(100%)` on `SPRING`, exits on a stiffer spring through `AnimatePresence`
+- Context menu: scale 0.95 to 1 with opacity from the top-left, `SPRING_GENTLE`
+- Devices section: `FADE_IN`
+- App wrapper fade-in: `opacity 120ms ease-out` (`.panel-root`)
 - Receive popup auto-dismiss bar: `8000ms linear` (a countdown, pauses on hover; marked `data-motion-timer`)
 - Popup button opacity: `120ms ease`
 - Underline loader: `underline-load 1.2s ease-in-out infinite`
@@ -230,7 +244,6 @@ Currently in use:
 
 Current code differs:
 
-- `motion` is installed but not yet used by any component.
 - No transition uses the specified cubic-bezier.
 
 ## Z-Index

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { motion } from "motion/react";
+import { SPRING_GENTLE } from "../animations";
 import type { Category, Clip } from "../types/clip";
 import type { SynaptPeer } from "../types/synapt";
 
@@ -112,10 +114,14 @@ export function ContextMenu({
     "w-full text-left px-3 py-1.5 text-xs flex items-center justify-between transition-colors";
 
   return (
-    <div
+    <motion.div
       ref={ref}
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={SPRING_GENTLE}
       className="absolute z-50 rounded"
       style={{
+        transformOrigin: "top left",
         left: x,
         top: y,
         minWidth: 180,
@@ -323,6 +329,6 @@ export function ContextMenu({
           })}
         </>
       )}
-    </div>
+    </motion.div>
   );
 }

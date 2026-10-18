@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Trash2, Undo2, CheckSquare, X, Settings as SettingsIcon } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 import { SearchBar } from "./SearchBar";
 import { ClipList } from "./ClipList";
 import { ClipCard } from "./ClipCard";
@@ -14,6 +15,11 @@ import { ClipReceivePopup } from "./ClipReceivePopup";
 import type { Category, Clip } from "../types/clip";
 import type { SearchResult } from "../types/search";
 import type { BridgeState } from "../types/synapt";
+import { useEntranceOnShow } from "../hooks/useEntranceOnShow";
+import { PANEL_ENTER, RESULT_ITEM, ITEM_EXIT } from "../animations";
+
+// Only the first rows stagger in; later rows start at once.
+const STAGGER_CAP = 8;
 
 interface PanelProps {
   onOpenSettings?: () => void;
@@ -55,6 +61,7 @@ export function Panel({ onOpenSettings }: PanelProps) {
     api_version: null,
   });
   const rootRef = useRef<HTMLDivElement>(null);
+  const entrance = useEntranceOnShow(PANEL_ENTER);
 
   const reloadCategories = useCallback(() => {
     invoke<Category[]>("get_categories")
@@ -323,8 +330,10 @@ export function Panel({ onOpenSettings }: PanelProps) {
   };
 
   return (
-    <div
+    <motion.div
       ref={rootRef}
+      initial={PANEL_ENTER.initial}
+      animate={entrance}
       tabIndex={0}
       onKeyDown={handleKeyDown}
       className="flex flex-col w-screen h-screen overflow-hidden focus:outline-none relative"
@@ -483,28 +492,38 @@ export function Panel({ onOpenSettings }: PanelProps) {
             </p>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto">
-            {searchResults.map((result, idx) => {
-              const clip = clipsById.get(result.clip_id);
-              if (!clip) return null;
-              return (
-                <ClipCard
-                  key={result.clip_id}
-                  clip={clip}
-                  onCopy={handleCopy}
-                  onDelete={handleDelete}
-                  matchPositions={result.match_positions}
-                  selected={idx === selectedIndex}
-                  onRightClick={(e) => onCardRightClick(clip, e)}
-                />
-              );
-            })}
+          <div className="flex-1 overflow-y-auto relative">
+            <AnimatePresence mode="popLayout">
+              {searchResults.map((result, idx) => {
+                const clip = clipsById.get(result.clip_id);
+                if (!clip) return null;
+                return (
+                  <motion.div
+                    key={result.clip_id}
+                    {...RESULT_ITEM(idx < STAGGER_CAP ? idx : 0)}
+                    exit={ITEM_EXIT}
+                  >
+                    <ClipCard
+                      clip={clip}
+                      onCopy={handleCopy}
+                      onDelete={handleDelete}
+                      matchPositions={result.match_positions}
+                      selected={idx === selectedIndex}
+                      onRightClick={(e) => onCardRightClick(clip, e)}
+                    />
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
           </div>
         )
       ) : activeTab === "groups" ? (
         <GroupsView onCopy={handleCopy} />
       ) : (
         <ClipList
+          // Remount per tab so the old tab's rows do not fade out over the new
+          // tab's rows; the new list staggers in on its own.
+          key={activeTab}
           clips={clips}
           onCopy={handleCopy}
           onDelete={handleDelete}
@@ -518,22 +537,25 @@ export function Panel({ onOpenSettings }: PanelProps) {
         />
       )}
 
-      {receivePopup && (
-        <ClipReceivePopup
-          clip_id={receivePopup.clip_id}
-          content={receivePopup.content}
-          sender_name={receivePopup.sender_name}
-          onCopy={() => setReceivePopup(null)}
-          onView={() => {
-            // A received clip always lands in the full history, which the other
-            // tabs may filter out, so jump back to All before scrolling to it.
-            setActiveTab("all");
-            setScrollToClipId(receivePopup.clip_id);
-            setReceivePopup(null);
-          }}
-          onDismiss={() => setReceivePopup(null)}
-        />
-      )}
+      <AnimatePresence>
+        {receivePopup && (
+          <ClipReceivePopup
+            key={receivePopup.clip_id}
+            clip_id={receivePopup.clip_id}
+            content={receivePopup.content}
+            sender_name={receivePopup.sender_name}
+            onCopy={() => setReceivePopup(null)}
+            onView={() => {
+              // A received clip always lands in the full history, which the other
+              // tabs may filter out, so jump back to All before scrolling to it.
+              setActiveTab("all");
+              setScrollToClipId(receivePopup.clip_id);
+              setReceivePopup(null);
+            }}
+            onDismiss={() => setReceivePopup(null)}
+          />
+        )}
+      </AnimatePresence>
 
       {contextMenu && (
         <ContextMenu
@@ -555,6 +577,6 @@ export function Panel({ onOpenSettings }: PanelProps) {
           }}
         />
       )}
-    </div>
+    </motion.div>
   );
 }

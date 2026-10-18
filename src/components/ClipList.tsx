@@ -1,6 +1,12 @@
 import { useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { RESULT_ITEM, ITEM_EXIT } from "../animations";
 import { ClipCard } from "./ClipCard";
 import type { Clip } from "../types/clip";
+
+// Only the first rows stagger in; later rows start at once so a long history
+// never makes the user wait for the entrance to finish.
+const STAGGER_CAP = 8;
 
 interface ClipListProps {
   clips: Clip[];
@@ -80,20 +86,28 @@ export function ClipList({
   }
 
   return (
-    <div ref={containerRef} className="flex-1 overflow-y-auto">
-      {clips.map((clip) => (
-        <ClipCard
-          key={clip.id}
-          clip={clip}
-          selected={clip.id === scrollToId}
-          onCopy={onCopy}
-          onDelete={onDelete}
-          bulkMode={bulkMode}
-          isSelected={selectedIds?.has(clip.id) ?? false}
-          onToggleSelect={onToggleSelect}
-          onRightClick={onRightClick ? (e) => onRightClick(clip, e) : undefined}
-        />
-      ))}
+    // relative: popLayout pops removed rows out of flow against this container.
+    <div ref={containerRef} className="flex-1 overflow-y-auto relative">
+      <AnimatePresence mode="popLayout">
+        {clips.map((clip, index) => (
+          <motion.div
+            key={clip.id}
+            {...RESULT_ITEM(index < STAGGER_CAP ? index : 0)}
+            exit={ITEM_EXIT}
+          >
+            <ClipCard
+              clip={clip}
+              selected={clip.id === scrollToId}
+              onCopy={onCopy}
+              onDelete={onDelete}
+              bulkMode={bulkMode}
+              isSelected={selectedIds?.has(clip.id) ?? false}
+              onToggleSelect={onToggleSelect}
+              onRightClick={onRightClick ? (e) => onRightClick(clip, e) : undefined}
+            />
+          </motion.div>
+        ))}
+      </AnimatePresence>
     </div>
   );
 }
