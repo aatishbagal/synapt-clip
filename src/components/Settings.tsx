@@ -9,6 +9,7 @@ import { Select } from "./Select";
 import { InlineConfirm } from "./InlineConfirm";
 import type { Category } from "../types/clip";
 import { UnderlineLoader } from "./UnderlineLoader";
+import { describeError } from "../utils/errors";
 
 interface SettingsProps {
   onClose: () => void;
@@ -192,6 +193,9 @@ export function Settings({ onClose }: SettingsProps) {
   const [systemNames, setSystemNames] = useState<string[]>([]);
   const [categoryEnabled, setCategoryEnabled] = useState<Record<string, boolean>>({});
   const [confirmDeleteCategory, setConfirmDeleteCategory] = useState<string | null>(null);
+  // A setting that fails to save is reported at the top of Settings rather
+  // than only in the console, so the user knows the change did not stick.
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [recordingHotkey, setRecordingHotkey] = useState(false);
   const [hotkeyPreview, setHotkeyPreview] = useState("");
   const [hotkeyActive, setHotkeyActive] = useState(true);
@@ -226,7 +230,7 @@ export function Settings({ onClose }: SettingsProps) {
       const info = await invoke<UpdateInfo | null>("check_for_update");
       setUpdateState(info ? { kind: "available", info } : { kind: "none" });
     } catch (e) {
-      setUpdateState({ kind: "error", message: String(e) });
+      setUpdateState({ kind: "error", message: describeError(e, "Check your internet connection and try again.") });
     } finally {
       await coreCheck;
     }
@@ -237,7 +241,10 @@ export function Settings({ onClose }: SettingsProps) {
     invoke("set_setting", {
       key: "auto_update_check",
       value: String(enabled),
-    }).catch((err) => console.error("Failed to set auto_update_check:", err));
+    }).catch((err) => {
+      setAutoUpdate(!enabled);
+      setSaveError(describeError(err, "Could not save that setting. Try again."));
+    });
   };
 
   const installUpdate = useCallback(async () => {
@@ -246,7 +253,7 @@ export function Settings({ onClose }: SettingsProps) {
       // Succeeds by restarting into the new version, so nothing follows it.
       await invoke("install_update");
     } catch (e) {
-      setUpdateState({ kind: "error", message: `Install failed: ${String(e)}` });
+      setUpdateState({ kind: "error", message: describeError(e, "The update could not be installed. Try again later.") });
     }
   }, []);
 
@@ -264,7 +271,9 @@ export function Settings({ onClose }: SettingsProps) {
         // real status rather than an inert button waiting to be clicked.
         if (auto) void checkForUpdate();
       })
-      .catch((err) => console.error("Failed to load settings:", err));
+      .catch((err) =>
+        setSaveError(describeError(err, "Could not load your settings. The values shown are defaults.")),
+      );
 
     invoke<string>("get_app_version")
       .then(setAppVersion)
@@ -313,8 +322,9 @@ export function Settings({ onClose }: SettingsProps) {
   }, []);
 
   const persist = useCallback((key: string, value: string) => {
+    setSaveError(null);
     invoke("set_setting", { key, value }).catch((err) =>
-      console.error(`Failed to set ${key}:`, err),
+      setSaveError(describeError(err, "Could not save that setting. Try again.")),
     );
   }, []);
 
@@ -390,7 +400,7 @@ export function Settings({ onClose }: SettingsProps) {
         setConfirmDeleteCategory(null);
         void reloadCategories();
       })
-      .catch((err) => console.error("Failed to delete category:", err));
+      .catch((err) => setSaveError(describeError(err, "Could not delete the category. Try again.")));
   };
 
   // Entering and leaving recording mode must bracket the global hotkey. On
@@ -492,8 +502,8 @@ export function Settings({ onClose }: SettingsProps) {
   const handleToggleAutostart = (checked: boolean) => {
     setAutostart(checked);
     invoke("set_autostart", { enabled: checked }).catch((err) => {
-      console.error("Failed to set autostart:", err);
       setAutostart(!checked);
+      setSaveError(describeError(err, "Could not change the start-on-login setting. Try again."));
     });
   };
 
@@ -585,14 +595,19 @@ export function Settings({ onClose }: SettingsProps) {
           type="button"
           onClick={onClose}
           title="Close"
-          className="flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors"
-          style={{ color: "var(--muted)" }}
+          aria-label="Close settings"
+          className="icon-button"
         >
-          <X size={12} />
+          <X size={14} />
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-5">
+      <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-6">
+        {saveError && (
+          <p role="alert" className="error-text">
+            {saveError}
+          </p>
+        )}
         <Section title="History">
           <Row label="History limit">
             <Select
@@ -624,20 +639,20 @@ export function Settings({ onClose }: SettingsProps) {
               {excluded.map((app) => (
                 <span
                   key={app}
-                  className="flex items-center gap-1 px-2 py-0.5 text-xs rounded"
+                  className="flex items-center gap-1 text-xs rounded"
                   style={{
-                    backgroundColor: "var(--surface)",
-                    border: "1px solid var(--border)",
+                    backgroundColor: "var(--surface-hover)",
+                    padding: "0 4px 0 8px",
                   }}
                 >
                   {app}
                   <button
                     type="button"
                     onClick={() => handleRemoveExcluded(app)}
-                    className="rounded"
-                    style={{ color: "var(--muted)" }}
+                    aria-label={`Stop excluding ${app}`}
+                    className="icon-button"
                   >
-                    <X size={10} />
+                    <X size={12} />
                   </button>
                 </span>
               ))}
@@ -653,23 +668,15 @@ export function Settings({ onClose }: SettingsProps) {
                     handleAddExcluded();
                   }
                 }}
-                placeholder="App identifier"
-                className="flex-1 rounded px-2 py-1 text-xs"
-                style={{
-                  backgroundColor: "var(--surface)",
-                  color: "var(--text)",
-                  border: "1px solid var(--border)",
-                }}
+                placeholder="App identifier, e.g. com.1password.1password"
+                aria-label="App to exclude"
+                className="input flex-1"
               />
               <button
                 type="button"
                 onClick={handleAddExcluded}
-                className="rounded px-2 py-1 text-xs"
-                style={{
-                  backgroundColor: "var(--surface)",
-                  color: "var(--text)",
-                  border: "1px solid var(--border)",
-                }}
+                disabled={excludedInput.trim().length === 0}
+                className="btn btn-secondary"
               >
                 Add
               </button>
@@ -679,7 +686,7 @@ export function Settings({ onClose }: SettingsProps) {
 
         <Section title="Categories">
           {systemNames.map((name) => (
-            <div key={name} className="flex flex-col gap-0.5">
+            <div key={name} className="flex flex-col">
               <Row label={name}>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -704,9 +711,7 @@ export function Settings({ onClose }: SettingsProps) {
             className="flex flex-col gap-2"
             style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}
           >
-            <span className="text-[11px] uppercase tracking-wider" style={{ color: "var(--muted)" }}>
-              Your categories
-            </span>
+            <h3 className="section-heading mb-0">Your categories</h3>
             {categories.filter((c) => c.is_system === 0).length === 0 ? (
               <p className="text-[11px]" style={{ color: "var(--muted)" }}>
                 No custom categories yet. Right-click a clip to add it to a category.
@@ -720,12 +725,7 @@ export function Settings({ onClose }: SettingsProps) {
                       <button
                         type="button"
                         onClick={() => setConfirmDeleteCategory(cat.name)}
-                        className="rounded px-2 py-0.5 text-xs"
-                        style={{
-                          backgroundColor: "transparent",
-                          color: "var(--danger)",
-                          border: "1px solid var(--border)",
-                        }}
+                        className="btn btn-destructive"
                       >
                         Delete
                       </button>
@@ -776,8 +776,7 @@ export function Settings({ onClose }: SettingsProps) {
                   type="button"
                   disabled={shortcut.busy}
                   onClick={() => { void shortcut.configure(); }}
-                  className="rounded px-2 py-1 text-xs"
-                  style={{ backgroundColor: "var(--surface)", color: "var(--text)" }}
+                  className="btn btn-secondary"
                 >
                   {shortcut.busy ? "Waiting for desktop..." : "Configure shortcut"}
                 </button>
@@ -796,19 +795,17 @@ export function Settings({ onClose }: SettingsProps) {
                 if (recordingHotkey) stopRecording();
               }}
               onKeyDown={handleHotkeyKeyDown}
-              className="rounded px-2 py-1 text-xs"
+              aria-label="Global hotkey. Focus and press a key combination to change it."
+              className="input"
               style={{
-                backgroundColor: "var(--surface)",
-                color: "var(--text)",
-                border: `1px solid ${
-                  recordingHotkey ? "var(--accent)" : "var(--border)"
-                }`,
+                borderColor: recordingHotkey ? "var(--accent)" : undefined,
                 width: "200px",
               }}
             />}
           </Row>
           {hotkeyFeedback && (
             <p
+              role={hotkeyFeedback.ok ? "status" : "alert"}
               className="text-xs"
               style={{
                 color: hotkeyFeedback.ok ? "var(--success)" : "var(--danger)",
@@ -818,7 +815,7 @@ export function Settings({ onClose }: SettingsProps) {
             </p>
           )}
           {!shortcut.info?.wayland && !hotkeyActive && (
-            <p style={{ color: "var(--warning)", fontSize: 12 }}>
+            <p role="alert" style={{ color: "var(--warning)", fontSize: 12 }}>
               Hotkey inactive. The combination is most likely already claimed by
               the system or another application. Try a different one.
             </p>
@@ -829,7 +826,7 @@ export function Settings({ onClose }: SettingsProps) {
             </p>
           )}
           {(shortcut.error || shortcut.info?.error) && (
-            <p className="text-xs" style={{ color: "var(--danger)" }}>
+            <p role="alert" className="error-text">
               {shortcut.error || shortcut.info?.error}
             </p>
           )}
@@ -848,7 +845,7 @@ export function Settings({ onClose }: SettingsProps) {
           </Row>
         </Section>
 
-        <Section title="Wayland">
+        <Section title="Clipboard capture">
           {renderBackendStatus()}
           {backendStatus && (
             <p className="text-xs" style={{ color: "var(--muted)" }}>
@@ -859,7 +856,7 @@ export function Settings({ onClose }: SettingsProps) {
 
         <Section title="Updates">
           <div className="flex flex-col gap-2">
-            <div className="flex flex-col gap-0.5">
+            <div className="flex flex-col">
               <p className="text-xs" style={{ color: "var(--text)" }}>
                 SynaptClip
               </p>
@@ -882,12 +879,7 @@ export function Settings({ onClose }: SettingsProps) {
                 <button
                   type="button"
                   onClick={installUpdate}
-                  className="rounded px-2 py-1 text-xs shrink-0"
-                  style={{
-                    backgroundColor: "var(--surface)",
-                    color: "var(--accent)",
-                    border: "1px solid var(--border)",
-                  }}
+                  className="btn btn-primary shrink-0"
                 >
                   Install and restart
                 </button>
@@ -896,13 +888,7 @@ export function Settings({ onClose }: SettingsProps) {
                   type="button"
                   onClick={checkForUpdate}
                   disabled={updateBusy}
-                  className="rounded px-2 py-1 text-xs shrink-0"
-                  style={{
-                    backgroundColor: "var(--surface)",
-                    color: "var(--text)",
-                    border: "1px solid var(--border)",
-                    opacity: updateBusy ? 0.5 : 1,
-                  }}
+                  className="btn btn-secondary shrink-0"
                 >
                   {updateState.kind === "idle" ? "Check for updates" : "Check again"}
                 </button>
@@ -917,7 +903,7 @@ export function Settings({ onClose }: SettingsProps) {
 
             <CoreUpdateNotice status={coreUpdate.status} checking={coreUpdate.checking} error={coreUpdate.error} />
 
-                <label className="flex items-center gap-2 cursor-pointer">
+            <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
                 checked={autoUpdate}
@@ -983,12 +969,8 @@ interface SectionProps {
 function Section({ title, children }: SectionProps) {
   return (
     <div className="flex flex-col gap-2">
-      <h2
-        className="text-[11px] uppercase tracking-wider"
-        style={{ color: "var(--muted)" }}
-      >
-        {title}
-      </h2>
+      {/* gap-2 supplies the heading's 8px bottom margin, so it is zeroed here. */}
+      <h2 className="section-heading mb-0">{title}</h2>
       <div
         className="flex flex-col gap-2 px-3 py-2 rounded"
         style={{

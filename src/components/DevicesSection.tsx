@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { motion } from "motion/react";
 import type { SynaptPeer } from "../types/synapt";
 import { FADE_IN } from "../animations";
+import { describeError } from "../utils/errors";
 
 interface DevicesSectionProps {
   peers: SynaptPeer[];
@@ -17,6 +18,7 @@ interface PeerRowProps {
 
 function PeerRow({ peer, onSendLatest }: PeerRowProps) {
   const [status, setStatus] = useState<SendStatus>("idle");
+  const [reason, setReason] = useState<string | undefined>(undefined);
 
   const handleSend = useCallback(async () => {
     setStatus("sending");
@@ -24,11 +26,12 @@ function PeerRow({ peer, onSendLatest }: PeerRowProps) {
       await onSendLatest(peer.id);
       setStatus("sent");
       setTimeout(() => setStatus("idle"), 2000);
-    } catch {
+    } catch (err) {
+      setReason(describeError(err, `Could not send to ${peer.name}. Try again.`));
       setStatus("error");
       setTimeout(() => setStatus("idle"), 3000);
     }
-  }, [peer.id, onSendLatest]);
+  }, [peer.id, peer.name, onSendLatest]);
 
   const buttonLabel =
     status === "sending"
@@ -36,43 +39,31 @@ function PeerRow({ peer, onSendLatest }: PeerRowProps) {
       : status === "sent"
         ? "Sent"
         : status === "error"
-          ? "Failed"
+          ? "Could not send"
           : "Send clipboard";
 
   return (
-    <div className="flex items-center justify-between px-3 py-1.5">
-      <div className="flex items-center gap-2 min-w-0">
-        <span
-          className="shrink-0 rounded-full"
-          style={{
-            width: 7,
-            height: 7,
-            backgroundColor: peer.online ? "var(--accent)" : "var(--border)",
-          }}
-        />
-        <span className="truncate" style={{ color: "var(--text)", fontSize: 13 }}>
-          {peer.name}
-        </span>
-      </div>
-      {peer.online && (
+    <div className="flex items-center justify-between gap-2 px-3 py-1">
+      <span className="truncate" style={{ color: "var(--text)", fontSize: 13 }}>
+        {peer.name}
+      </span>
+      {peer.online ? (
         <button
           type="button"
           onClick={handleSend}
           disabled={status === "sending"}
-          className="shrink-0"
-          style={{
-            backgroundColor: "var(--surface)",
-            border: "1px solid var(--border)",
-            color: status === "error" ? "var(--danger)" : "var(--text)",
-            borderRadius: 4,
-            fontSize: 11,
-            padding: "3px 8px",
-            cursor: status === "sending" ? "default" : "pointer",
-            opacity: status === "sending" ? 0.7 : 1,
-          }}
+          title={status === "error" ? reason : undefined}
+          aria-live="polite"
+          className="btn btn-secondary shrink-0"
+          style={status === "error" ? { color: "var(--danger)" } : undefined}
         >
           {buttonLabel}
         </button>
+      ) : (
+        // Text label rather than a status dot.
+        <span className="shrink-0 text-xs" style={{ color: "var(--muted)" }}>
+          Offline
+        </span>
       )}
     </div>
   );
@@ -85,23 +76,13 @@ export function DevicesSection({ peers, onSendLatest }: DevicesSectionProps) {
       className="shrink-0"
       style={{ borderBottom: "1px solid var(--border)" }}
     >
-      <div
-        className="px-3 pt-2 pb-1"
-        style={{
-          color: "var(--muted)",
-          fontSize: 11,
-          textTransform: "uppercase",
-          letterSpacing: "0.06em",
-        }}
-      >
-        Devices
-      </div>
+      <h2 className="section-heading px-3 pt-2">Devices</h2>
       {peers.length === 0 ? (
         <div
           className="px-3 pb-2"
           style={{ color: "var(--muted)", fontSize: 12 }}
         >
-          No devices online. Ensure Synapt is running on the peer device.
+          No devices online. Open Synapt on your other device to send clips to it.
         </div>
       ) : (
         <div className="pb-1">

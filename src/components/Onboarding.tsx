@@ -16,7 +16,7 @@ export function Onboarding({ onDone }: OnboardingProps) {
       className="flex flex-col items-center justify-center w-screen h-screen"
       style={{ backgroundColor: "var(--bg)", color: "var(--text)" }}
     >
-      <div className="flex flex-col items-center gap-5 px-8 max-w-sm text-center">
+      <div className="flex flex-col items-center gap-6 px-8 max-w-sm text-center">
         <div className="flex items-center gap-2">
           <img
             src="/assets/images/logo/png/SynaptV2_White_PNG.png"
@@ -42,16 +42,7 @@ export function Onboarding({ onDone }: OnboardingProps) {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={handleStart}
-          className="rounded px-4 py-1.5 text-xs"
-          style={{
-            backgroundColor: "var(--accent)",
-            color: "var(--on-accent)",
-            border: "none",
-          }}
-        >
+        <button type="button" onClick={handleStart} className="btn btn-primary">
           Get started
         </button>
       </div>

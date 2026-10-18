@@ -69,15 +69,6 @@ export function ClipReceivePopup({
     return () => document.removeEventListener("keydown", onKeyDown, true);
   }, [handleCopy, handleDismiss, isPresent]);
 
-  const buttonBase = {
-    flex: 1,
-    padding: "5px 0",
-    borderRadius: 4,
-    fontSize: 12,
-    cursor: "pointer",
-    transition: "opacity 120ms ease",
-  } as const;
-
   return (
     <motion.div
       role="status"
@@ -93,36 +84,20 @@ export function ClipReceivePopup({
         bottom: 16,
         zIndex: 500,
         overflow: "hidden",
-        padding: "12px 14px 0",
+        padding: "12px 16px 0",
         borderRadius: 8,
         backgroundColor: "var(--surface)",
-        border: "1px solid color-mix(in srgb, var(--accent) 40%, transparent)",
-        boxShadow: "var(--shadow-toast)",
+        border: "1px solid var(--border)",
       }}
     >
       <div className="flex items-start justify-between gap-2">
-        <span
-          style={{
-            color: "var(--muted)",
-            fontSize: 11,
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
-          }}
-        >
-          From {sender_name}
-        </span>
+        <span className="section-heading mb-0">From {sender_name}</span>
         <button
           type="button"
           aria-label="Dismiss"
+          title="Dismiss (Esc)"
           onClick={handleDismiss}
-          style={{
-            color: "var(--muted)",
-            background: "transparent",
-            border: "none",
-            cursor: "pointer",
-            lineHeight: 0,
-            padding: 0,
-          }}
+          className="icon-button"
         >
           <X size={14} />
         </button>
@@ -131,7 +106,7 @@ export function ClipReceivePopup({
       <p
         className="line-clamp-2"
         style={{
-          marginTop: 6,
+          marginTop: 8,
           color: "var(--text)",
           fontSize: 13,
           whiteSpace: "pre-wrap",
@@ -142,46 +117,19 @@ export function ClipReceivePopup({
         {content}
       </p>
 
-      <div className="flex" style={{ gap: 8, marginTop: 10 }}>
-        <button
-          type="button"
-          onClick={handleCopy}
-          style={{
-            ...buttonBase,
-            backgroundColor: "var(--accent)",
-            color: "var(--on-accent)",
-            border: "1px solid var(--accent)",
-          }}
-        >
+      <div className="flex" style={{ gap: 8, marginTop: 12 }}>
+        <button type="button" onClick={handleCopy} title="Copy (Enter)" className="btn btn-primary flex-1">
           Copy
         </button>
-        <button
-          type="button"
-          onClick={handleView}
-          style={{
-            ...buttonBase,
-            backgroundColor: "var(--surface)",
-            color: "var(--text)",
-            border: "1px solid var(--border)",
-          }}
-        >
+        <button type="button" onClick={handleView} className="btn btn-secondary flex-1">
           View
         </button>
-        <button
-          type="button"
-          onClick={handleDismiss}
-          style={{
-            ...buttonBase,
-            backgroundColor: "transparent",
-            color: "var(--muted)",
-            border: "none",
-          }}
-        >
+        <button type="button" onClick={handleDismiss} className="btn btn-ghost flex-1">
           Dismiss
         </button>
       </div>
 
-      <div style={{ height: 3, marginTop: 10, marginLeft: -14, marginRight: -14 }}>
+      <div style={{ height: 3, marginTop: 12, marginLeft: -16, marginRight: -16 }}>
         <div
           // Exempt from the reduced-motion override: this countdown is what
           // dismisses the popup, so collapsing it would dismiss it instantly.

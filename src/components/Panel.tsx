@@ -12,6 +12,9 @@ import { GroupsView } from "./GroupsView";
 import { ContextMenu } from "./ContextMenu";
 import { DevicesSection } from "./DevicesSection";
 import { ClipReceivePopup } from "./ClipReceivePopup";
+import { EmptyState } from "./EmptyState";
+import { InlineConfirm } from "./InlineConfirm";
+import { describeError } from "../utils/errors";
 import type { Category, Clip } from "../types/clip";
 import type { SearchResult } from "../types/search";
 import type { BridgeState } from "../types/synapt";
@@ -36,6 +39,9 @@ type ReceivedClip = {
 // How long a clip stays highlighted after the popup's View button jumps to it.
 const VIEW_HIGHLIGHT_MS = 1500;
 
+// How long a failed-action message stays before it clears itself.
+const ACTION_ERROR_MS = 6000;
+
 export function Panel({ onOpenSettings }: PanelProps) {
   // Read from the binary rather than a constant here, so the header cannot
   // drift from Cargo.toml and tauri.conf.json on a version bump.
@@ -52,6 +58,13 @@ export function Panel({ onOpenSettings }: PanelProps) {
   const [bulkMode, setBulkMode] = useState(false);
   const [setupWarning, setSetupWarning] = useState<string | null>(null);
   const [undoStack, setUndoStack] = useState(0);
+  // Last failed action, in plain language. Every handler reports here so a
+  // failure is never only a console line.
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const report = useCallback((err: unknown, fallback: string) => {
+    setActionError(describeError(err, fallback));
+  }, []);
   const [contextMenu, setContextMenu] = useState<ContextState>(null);
   const [receivePopup, setReceivePopup] = useState<ReceivedClip | null>(null);
   const [scrollToClipId, setScrollToClipId] = useState<number | null>(null);
@@ -88,7 +101,11 @@ export function Panel({ onOpenSettings }: PanelProps) {
           }
           setClips(ordered);
         })
-        .catch((err) => console.error("Failed to fetch clips:", err))
+        .catch((err) =>
+          setActionError(
+            describeError(err, "Could not load your clipboard history. Close and reopen the panel to try again."),
+          ),
+        )
         .finally(() => setLoading(false));
     } else {
       const loader =
@@ -99,7 +116,11 @@ export function Panel({ onOpenSettings }: PanelProps) {
             : invoke<Clip[]>("get_clips", { category: tab, limit: 500 });
       loader
         .then(setClips)
-        .catch((err) => console.error("Failed to fetch clips:", err))
+        .catch((err) =>
+          setActionError(
+            describeError(err, "Could not load your clipboard history. Close and reopen the panel to try again."),
+          ),
+        )
         .finally(() => setLoading(false));
     }
   }, []);
@@ -111,6 +132,12 @@ export function Panel({ onOpenSettings }: PanelProps) {
   useEffect(() => {
     invoke<string>("get_app_version").then(setVersion).catch(() => setVersion(""));
   }, []);
+
+  useEffect(() => {
+    if (!actionError) return;
+    const timer = setTimeout(() => setActionError(null), ACTION_ERROR_MS);
+    return () => clearTimeout(timer);
+  }, [actionError]);
 
   // Drop the highlight once the user has had a moment to spot the clip.
   useEffect(() => {
@@ -176,37 +203,37 @@ export function Panel({ onOpenSettings }: PanelProps) {
 
   const handleCopy = useCallback((id: number) => {
     invoke("copy_clip", { id }).catch((err) =>
-      console.error("Failed to copy clip:", err),
+      report(err, "Could not copy the clip. Try again."),
     );
-  }, []);
+  }, [report]);
 
   const handleDelete = useCallback((id: number) => {
     setClips((prev) => prev.filter((c) => c.id !== id));
     setSearchResults((prev) => prev.filter((r) => r.clip_id !== id));
     setUndoStack((n) => n + 1);
-    invoke("delete_clip", { id }).catch((err) =>
-      console.error("Failed to delete clip:", err),
-    );
-  }, []);
+    invoke("delete_clip", { id }).catch((err) => {
+      setUndoStack((n) => Math.max(0, n - 1));
+      report(err, "Could not delete the clip. Reopen the panel to see your current history.");
+    });
+  }, [report]);
 
   const handleUndo = useCallback(() => {
     invoke<Clip | null>("undo_delete").catch((err) =>
-      console.error("Failed to undo:", err),
+      report(err, "Could not restore the deleted clip."),
     );
-  }, []);
+  }, [report]);
 
+  // Clearing cannot be undone, so it asks first, inline, like every other
+  // destructive action in the panel.
   const handleClearHistory = useCallback(() => {
-    const ok = window.confirm(
-      "Clear all non-pinned clips? Pinned clips are kept.",
-    );
-    if (!ok) return;
+    setConfirmClear(false);
     invoke<number>("clear_history")
       .then(() => {
         setClips((prev) => prev.filter((c) => c.pinned));
         setUndoStack(0);
       })
-      .catch((err) => console.error("Failed to clear history:", err));
-  }, []);
+      .catch((err) => report(err, "Could not clear your history. Try again."));
+  }, [report]);
 
   const toggleSelect = useCallback((id: number) => {
     setSelectedIds((prev) => {
@@ -223,12 +250,12 @@ export function Panel({ onOpenSettings }: PanelProps) {
     setClips((prev) => prev.filter((c) => !selectedIds.has(c.id)));
     setUndoStack((n) => n + ids.length);
     invoke("bulk_delete", { clipIds: ids })
-      .catch((err) => console.error("Failed to bulk delete:", err))
+      .catch((err) => report(err, "Could not delete the selected clips. Reopen the panel to see your current history."))
       .finally(() => {
         setSelectedIds(new Set());
         setBulkMode(false);
       });
-  }, [selectedIds]);
+  }, [selectedIds, report]);
 
   const handleTogglePin = useCallback(
     (clip: Clip) => {
@@ -239,9 +266,9 @@ export function Panel({ onOpenSettings }: PanelProps) {
           );
           if (activeTab === "pinned") loadClipsForTab("pinned");
         })
-        .catch((err) => console.error("Failed to toggle pin:", err));
+        .catch((err) => report(err, "Could not change whether this clip is pinned. Try again."));
     },
-    [activeTab, loadClipsForTab],
+    [activeTab, loadClipsForTab, report],
   );
 
   const handleAssignCategory = useCallback(
@@ -253,9 +280,9 @@ export function Panel({ onOpenSettings }: PanelProps) {
           );
           reloadCategories();
         })
-        .catch((err) => console.error("Failed to assign category:", err));
+        .catch((err) => report(err, "Could not change the clip's category. Try again."));
     },
-    [reloadCategories],
+    [reloadCategories, report],
   );
 
   const handleDeleteCategory = useCallback(
@@ -268,9 +295,9 @@ export function Panel({ onOpenSettings }: PanelProps) {
             prev.map((c) => (c.category === name ? { ...c, category: null } : c)),
           );
         })
-        .catch((err) => console.error("Failed to delete category:", err));
+        .catch((err) => report(err, "Could not delete the category. Try again."));
     },
-    [activeTab, reloadCategories],
+    [activeTab, reloadCategories, report],
   );
 
   const handleResults = useCallback((results: SearchResult[], query: string) => {
@@ -316,10 +343,17 @@ export function Panel({ onOpenSettings }: PanelProps) {
     [isSearching, searchResults, selectedIndex, handleCopy],
   );
 
-  const emptyMessageFor = (tab: string): string => {
-    if (tab === "pinned") return "No pinned clips. Right-click any clip to pin it.";
-    if (tab === "all") return "Copy something to get started";
-    return `No clips in "${tab}" yet`;
+  const emptyStateFor = (tab: string): { title: string; detail: string } => {
+    if (tab === "pinned") {
+      return { title: "No pinned clips", detail: "Right-click a clip and choose Pin to keep it here." };
+    }
+    if (tab === "all") {
+      return { title: "No clips yet", detail: "Copy something and it will appear here." };
+    }
+    return {
+      title: `No clips in ${tab} yet`,
+      detail: "Right-click a clip to add it to this category.",
+    };
   };
 
   const onCardRightClick = (clip: Clip, e: React.MouseEvent) => {
@@ -345,11 +379,7 @@ export function Panel({ onOpenSettings }: PanelProps) {
     >
       <div
         className="flex items-center justify-between px-3 shrink-0"
-        style={{
-          height: "40px",
-          borderBottom: "1px solid var(--border)",
-          backgroundColor: "var(--bg)",
-        }}
+        style={{ height: "40px", backgroundColor: "var(--bg)" }}
       >
         <div className="flex items-center gap-2">
           <img
@@ -369,11 +399,11 @@ export function Panel({ onOpenSettings }: PanelProps) {
               <button
                 type="button"
                 onClick={handleBulkDelete}
-                className="flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors"
-                style={{ color: "var(--danger)" }}
+                disabled={selectedIds.size === 0}
+                className="icon-button icon-button-labeled icon-button-danger"
               >
                 <Trash2 size={12} />
-                Delete selected ({selectedIds.size})
+                <span>Delete selected ({selectedIds.size})</span>
               </button>
               <button
                 type="button"
@@ -381,11 +411,10 @@ export function Panel({ onOpenSettings }: PanelProps) {
                   setBulkMode(false);
                   setSelectedIds(new Set());
                 }}
-                className="flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors"
-                style={{ color: "var(--muted)" }}
+                className="icon-button icon-button-labeled"
               >
                 <X size={12} />
-                Cancel
+                <span>Cancel</span>
               </button>
             </>
           ) : (
@@ -395,46 +424,72 @@ export function Panel({ onOpenSettings }: PanelProps) {
                   type="button"
                   onClick={handleUndo}
                   title="Undo last delete"
-                  className="flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors"
-                  style={{ color: "var(--muted)" }}
+                  className="icon-button icon-button-labeled"
                 >
                   <Undo2 size={12} />
+                  <span>Undo</span>
                 </button>
               )}
               <button
                 type="button"
                 onClick={() => setBulkMode(true)}
-                title="Select multiple"
-                className="flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors"
-                style={{ color: "var(--muted)" }}
+                title="Select multiple clips"
+                className="icon-button icon-button-labeled"
               >
                 <CheckSquare size={12} />
-                Select
+                <span>Select</span>
               </button>
               <button
                 type="button"
-                onClick={handleClearHistory}
+                onClick={() => setConfirmClear(true)}
                 title="Clear history"
-                className="flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors"
-                style={{ color: "var(--muted)" }}
+                aria-label="Clear history"
+                className="icon-button"
               >
-                <Trash2 size={12} />
+                <Trash2 size={14} />
               </button>
               {onOpenSettings && (
                 <button
                   type="button"
                   onClick={onOpenSettings}
                   title="Settings"
-                  className="flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors"
-                  style={{ color: "var(--muted)" }}
+                  aria-label="Settings"
+                  className="icon-button"
                 >
-                  <SettingsIcon size={12} />
+                  <SettingsIcon size={14} />
                 </button>
               )}
             </>
           )}
         </div>
       </div>
+
+      {confirmClear && (
+        <div className="shrink-0 px-3 pb-2">
+          <InlineConfirm
+            message="Clear all clips except pinned ones? This cannot be undone."
+            confirmLabel="Clear history"
+            onConfirm={handleClearHistory}
+            onCancel={() => setConfirmClear(false)}
+          />
+        </div>
+      )}
+
+      {actionError && (
+        <div className="flex items-start justify-between gap-2 px-4 pb-2 shrink-0">
+          <p role="alert" className="error-text flex-1">
+            {actionError}
+          </p>
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            aria-label="Dismiss message"
+            className="icon-button shrink-0"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
 
       {setupWarning && (
         <div
@@ -449,7 +504,8 @@ export function Panel({ onOpenSettings }: PanelProps) {
           <button
             type="button"
             onClick={() => setSetupWarning(null)}
-            className="shrink-0 rounded p-0.5"
+            aria-label="Dismiss warning"
+            className="shrink-0 rounded p-1"
             style={{ color: "var(--warning-text)" }}
           >
             <X size={12} />
@@ -461,6 +517,7 @@ export function Panel({ onOpenSettings }: PanelProps) {
         onResults={handleResults}
         onClear={handleClearSearch}
         onEscape={handleEscape}
+        onError={(err) => report(err, "Search failed. Try again.")}
       />
 
       {!isSearching && (
@@ -486,11 +543,10 @@ export function Panel({ onOpenSettings }: PanelProps) {
 
       {isSearching ? (
         searchResults.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-sm" style={{ color: "var(--muted)" }}>
-              No results for &ldquo;{activeQuery}&rdquo;
-            </p>
-          </div>
+          <EmptyState
+            title={`No clips match \u201c${activeQuery}\u201d`}
+            detail="Check the spelling, or try a shorter search."
+          />
         ) : (
           <div className="flex-1 overflow-y-auto relative">
             <AnimatePresence mode="popLayout">
@@ -528,7 +584,8 @@ export function Panel({ onOpenSettings }: PanelProps) {
           onCopy={handleCopy}
           onDelete={handleDelete}
           loading={loading}
-          emptyMessage={emptyMessageFor(activeTab)}
+          emptyTitle={emptyStateFor(activeTab).title}
+          emptyDetail={emptyStateFor(activeTab).detail}
           bulkMode={bulkMode}
           selectedIds={selectedIds}
           onToggleSelect={toggleSelect}

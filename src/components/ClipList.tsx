@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { RESULT_ITEM, ITEM_EXIT } from "../animations";
 import { ClipCard } from "./ClipCard";
+import { EmptyState } from "./EmptyState";
 import type { Clip } from "../types/clip";
 
 // Only the first rows stagger in; later rows start at once so a long history
@@ -13,7 +14,8 @@ interface ClipListProps {
   onCopy: (id: number) => void;
   onDelete: (id: number) => void;
   loading: boolean;
-  emptyMessage?: string;
+  emptyTitle?: string;
+  emptyDetail?: string;
   bulkMode?: boolean;
   selectedIds?: Set<number>;
   onToggleSelect?: (id: number) => void;
@@ -23,10 +25,7 @@ interface ClipListProps {
 
 function SkeletonRow() {
   return (
-    <div
-      className="flex items-center gap-2 px-3 py-2.5 border-b"
-      style={{ borderColor: "var(--border)" }}
-    >
+    <div className="list-row flex items-center gap-2" aria-hidden>
       <div
         className="flex-1 h-4 rounded animate-pulse"
         style={{ backgroundColor: "var(--surface-hover)" }}
@@ -44,7 +43,8 @@ export function ClipList({
   onCopy,
   onDelete,
   loading,
-  emptyMessage,
+  emptyTitle,
+  emptyDetail,
   bulkMode,
   selectedIds,
   onToggleSelect,
@@ -67,7 +67,7 @@ export function ClipList({
 
   if (loading) {
     return (
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" role="status" aria-label="Loading clips">
         <SkeletonRow />
         <SkeletonRow />
         <SkeletonRow />
@@ -76,13 +76,7 @@ export function ClipList({
   }
 
   if (clips.length === 0) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <p className="text-sm" style={{ color: "var(--muted)" }}>
-          {emptyMessage ?? "No clipboard history yet"}
-        </p>
-      </div>
-    );
+    return <EmptyState title={emptyTitle ?? "No clips yet"} detail={emptyDetail} />;
   }
 
   return (
