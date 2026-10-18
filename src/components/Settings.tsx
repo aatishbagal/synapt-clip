@@ -529,7 +529,8 @@ export function Settings({ onClose }: SettingsProps) {
               href="https://extensions.gnome.org/extension/4839/clipboard-history/"
               target="_blank"
               rel="noreferrer"
-              className="text-xs text-blue-400 hover:text-blue-300"
+              className="text-xs hover:underline"
+              style={{ color: "var(--accent)" }}
             >
               Install Clipboard History extension
             </a>

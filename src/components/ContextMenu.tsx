@@ -121,7 +121,7 @@ export function ContextMenu({
         minWidth: 180,
         backgroundColor: MENU_BG,
         border: `1px solid ${MENU_BORDER}`,
-        boxShadow: "0 6px 16px rgba(0, 0, 0, 0.5)",
+        boxShadow: "var(--shadow-menu)",
         color: TEXT,
       }}
     >
@@ -185,7 +185,7 @@ export function ContextMenu({
               minWidth: 180,
               backgroundColor: MENU_BG,
               border: `1px solid ${MENU_BORDER}`,
-              boxShadow: "0 6px 16px rgba(0, 0, 0, 0.5)",
+              boxShadow: "var(--shadow-menu)",
             }}
           >
             {categories.length === 0 && (

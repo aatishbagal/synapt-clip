@@ -48,7 +48,7 @@ export function Onboarding({ onDone }: OnboardingProps) {
           className="rounded px-4 py-1.5 text-xs"
           style={{
             backgroundColor: "var(--accent)",
-            color: "#fff",
+            color: "var(--on-accent)",
             border: "none",
           }}
         >

@@ -22,8 +22,9 @@ Defined in `src/styles.css`. The theme is chosen by `data-theme` on `<html>`. On
 resolves the OS preference once with `matchMedia` and writes `dark` or `light`.
 The bare `:root` block repeats the dark values as the default.
 
-Tailwind is not extended (`theme.extend` is empty), so tokens are applied through
-inline `style` props as `var(--token)` rather than Tailwind colour classes.
+Tailwind extends only transition timing and duration (see Animation System). Colours
+are not in the Tailwind theme, so tokens are applied through inline `style` props as
+`var(--token)` rather than Tailwind colour classes.
 
 Current code differs: the `system` theme does not follow OS changes while the app is
 running, because no `prefers-color-scheme` listener or media-query block exists.
@@ -62,7 +63,7 @@ running, because no `prefers-color-scheme` listener or media-query block exists.
 | `--accent-soft` | `#1f3a72` | `#dbeafe` | Compression ratio bar on clip cards |
 
 Tinted accent variants use `color-mix(in srgb, var(--accent) 40%, transparent)` (receive
-popup border), with a hardcoded `rgba(59, 130, 246, 0.4)` fallback for older WebKit.
+popup border).
 
 ### Semantic
 
@@ -77,15 +78,24 @@ popup border), with a hardcoded `rgba(59, 130, 246, 0.4)` fallback for older Web
 | `--highlight-bg` | `#854d0e` | `#fde68a` | Search match highlight fill |
 | `--highlight-text` | `#fef08a` | `#78350f` | Search match highlight text |
 
-The token set and values are currently identical to Synapt's. No token has the same
-value in dark and light.
+### Theme-independent
+
+Declared once in a separate `:root` block because the value is the same in both themes.
+
+| Token | Value | Use |
+|---|---|---|
+| `--on-accent` | `#ffffff` | Text on accent- or danger-filled buttons |
+| `--shadow-popup` | `0 4px 12px rgba(0, 0, 0, 0.3)` | `Select` popup shadow |
+| `--shadow-menu` | `0 6px 16px rgba(0, 0, 0, 0.5)` | Context menu shadow |
+| `--shadow-toast` | `0 4px 16px rgba(0, 0, 0, 0.4)` | Receive popup shadow |
+
+All other tokens differ between dark and light. The themed token set and values are
+identical to Synapt's; Synapt additionally defines `--backdrop` and not `--shadow-menu`
+or `--shadow-toast`.
 
 ### Hardcoded colours outside tokens
 
-- `#fff` / `#ffffff` - text on accent- and danger-filled buttons (`InlineConfirm`, `Onboarding`, `Select`, `ClipReceivePopup`)
-- `text-blue-400` / `hover:text-blue-300` - GCH extension install link in Settings
-- `rgba(59, 130, 246, 0.4)` - receive popup border fallback (dark accent only; wrong in light theme)
-- Shadows: `rgba(0, 0, 0, 0.5)` context menu, `rgba(0, 0, 0, 0.4)` receive popup, `rgba(0, 0, 0, 0.3)` Select popup
+None.
 
 ## Typography
 
@@ -155,7 +165,7 @@ Surface hierarchy:
 Current code differs:
 
 - Layers are also separated by 1px `--border` lines: header, search bar, tab strip, Devices section, and every clip row.
-- Context menu (`0 6px 16px rgba(0,0,0,0.5)`), receive popup (`0 4px 16px rgba(0,0,0,0.4)`), and Select popup (`0 4px 12px rgba(0,0,0,0.3)`) use shadows.
+- Context menu (`--shadow-menu`), receive popup (`--shadow-toast`), and Select popup (`--shadow-popup`) use shadows.
 
 ## Interactive States
 
@@ -190,11 +200,29 @@ Principles:
 Motion library: Framer Motion (`motion` package) for spring and presence animations.
 CSS cubic-bezier for micro-interactions and hover states.
 
+Tokens (in the stylesheet as custom properties, mirrored as Tailwind
+`ease-*` / `duration-*` utilities):
+
+| Token | Value | Tailwind |
+|---|---|---|
+| `--ease-standard` | `cubic-bezier(0.25, 0.1, 0.25, 1.0)` | `ease-standard` |
+| `--ease-decelerate` | `cubic-bezier(0.0, 0.0, 0.2, 1.0)` | `ease-decelerate` |
+| `--ease-accelerate` | `cubic-bezier(0.4, 0.0, 1.0, 1.0)` | `ease-accelerate` |
+| `--duration-micro` | `100ms` | `duration-micro` |
+| `--duration-short` | `150ms` | `duration-short` |
+| `--duration-medium` | `200ms` | `duration-medium` |
+
+Reduced motion: a global `prefers-reduced-motion: reduce` block collapses every CSS
+animation and transition to one 0.01ms frame. Infinite loaders run once and hold a
+static end frame instead of flickering. Elements marked `data-motion-timer` are exempt
+because their animation is a functional countdown, not decoration.
+Motion (JS) animations must check reduced motion themselves (`useReducedMotion()`).
+
 Currently in use:
 
 - Panel fade-in: `opacity 120ms ease-out` (`.panel-root`)
 - Receive popup: slide in `200ms ease-out`, slide out `150ms ease-in`
-- Receive popup auto-dismiss bar: `8000ms linear` (a countdown, pauses on hover)
+- Receive popup auto-dismiss bar: `8000ms linear` (a countdown, pauses on hover; marked `data-motion-timer`)
 - Popup button opacity: `120ms ease`
 - Underline loader: `underline-load 1.2s ease-in-out infinite`
 - Search spinner: Tailwind `animate-spin`
@@ -202,9 +230,8 @@ Currently in use:
 
 Current code differs:
 
-- `motion` / Framer Motion is not a dependency yet.
+- `motion` is installed but not yet used by any component.
 - No transition uses the specified cubic-bezier.
-- `prefers-reduced-motion` is not handled anywhere.
 
 ## Z-Index
 
@@ -228,7 +255,7 @@ Current code differs: the panel is centred on every show (`window.center()` in
 ### Category Tabs
 
 - Horizontally scrollable strip on `--surface`, 1px `--border` bottom
-- Thin 2px scrollbar indicator: WebKit `::-webkit-scrollbar` height 2px, thumb `--border` with 1px radius, `--muted` on hover; Firefox fallback `scrollbar-width: thin`
+- Thin 2px scrollbar indicator from the global scrollbar rules; the strip overrides the thumb to 1px radius and `--muted` on hover
 - `padding-bottom: 2px` reserves room for the indicator so it never covers labels
 - Tab: `px-3 py-1.5`, 12px label; active tab `--text` with a 2px `--accent` bottom border, inactive `--muted` with a transparent border
 
@@ -250,10 +277,9 @@ Current code differs: the main window is not transparent (`transparent` is unset
 - Window is frameless
 - Tray icon in system tray notification area
 - No window shadow (disabled to avoid rendering artifacts)
-- Scrollbar styling: thin (2px) using CSS scrollbar-width
+- Scrollbar styling: thin (4px vertical, 2px horizontal) via `::-webkit-scrollbar`, with `scrollbar-width: thin` as the fallback; applied globally
 
-Current code differs: `shadow` is not disabled, so the Tauri default applies. Only the
-category strip has thin scrollbar styling; the clip list uses the default scrollbar.
+Current code differs: `shadow` is not disabled, so the Tauri default applies.
 
 ### Linux
 
@@ -392,5 +418,4 @@ Existing violations to clean up:
 - Status dots: Devices section online indicator (7px, `--accent` when online).
 - Accent borders: bulk-selected clip row bottom border, receive popup outline, user-category badges on clip rows.
 - Pill badges: category badges on clip rows and the category count badge.
-- Hardcoded Tailwind colours: `text-blue-400` / `hover:text-blue-300` on the GCH install link.
 - More than 2 font sizes in one component: `ClipCard` (13px, 12px, 11px, 10px).

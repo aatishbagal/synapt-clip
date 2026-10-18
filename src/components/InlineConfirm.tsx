@@ -64,7 +64,7 @@ export function InlineConfirm({
           style={{
             ...buttonBase,
             backgroundColor: "var(--danger)",
-            color: "#fff",
+            color: "var(--on-accent)",
             border: "1px solid var(--danger)",
           }}
         >

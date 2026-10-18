@@ -97,11 +97,8 @@ export function ClipReceivePopup({
         padding: "12px 14px 0",
         borderRadius: 8,
         backgroundColor: "var(--surface)",
-        // color-mix is the accurate 40% accent; the rgba above it keeps older
-        // WebKit builds from falling back to no border at all.
-        border: "1px solid rgba(59, 130, 246, 0.4)",
-        borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-        boxShadow: "0 4px 16px rgba(0, 0, 0, 0.4)",
+        border: "1px solid color-mix(in srgb, var(--accent) 40%, transparent)",
+        boxShadow: "var(--shadow-toast)",
         animation: `synapt-receive-${leaving ? "out" : "in"} ${
           leaving ? EXIT_MS : 200
         }ms ${leaving ? "ease-in" : "ease-out"} forwards`,
@@ -156,7 +153,7 @@ export function ClipReceivePopup({
           style={{
             ...buttonBase,
             backgroundColor: "var(--accent)",
-            color: "#ffffff",
+            color: "var(--on-accent)",
             border: "1px solid var(--accent)",
           }}
         >
@@ -190,6 +187,9 @@ export function ClipReceivePopup({
 
       <div style={{ height: 3, marginTop: 10, marginLeft: -14, marginRight: -14 }}>
         <div
+          // Exempt from the reduced-motion override: this countdown is what
+          // dismisses the popup, so collapsing it would dismiss it instantly.
+          data-motion-timer
           onAnimationEnd={(e) => {
             // Only the progress bar finishing means the popup timed out. A
             // paused animation never ends, which is what hovering relies on.
