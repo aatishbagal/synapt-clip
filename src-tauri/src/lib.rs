@@ -503,6 +503,7 @@ pub fn run() {
             commands::clear_history,
             commands::get_settings,
             commands::set_setting,
+            commands::restart_app,
             commands::get_platform_info,
             commands::get_hotkey_status,
             commands::get_hotkey_info,

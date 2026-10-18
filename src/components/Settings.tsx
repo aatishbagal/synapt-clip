@@ -7,6 +7,7 @@ import { listen } from "@tauri-apps/api/event";
 import { X } from "lucide-react";
 import { Select } from "./Select";
 import { InlineConfirm } from "./InlineConfirm";
+import { ExperimentalSettings } from "./ExperimentalSettings";
 import type { Category } from "../types/clip";
 import { UnderlineLoader } from "./UnderlineLoader";
 import { describeError } from "../utils/errors";
@@ -955,6 +956,10 @@ export function Settings({ onClose }: SettingsProps) {
               Share {crashLogPath ? "these files" : "this file"} when reporting issues.
             </p>
           </div>
+        </Section>
+
+        <Section title="Experimental">
+          <ExperimentalSettings />
         </Section>
       </div>
     </div>
