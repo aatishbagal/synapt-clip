@@ -209,6 +209,7 @@ pub fn run() {
     };
     builder
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState {
             db: db.clone(),
@@ -519,6 +520,9 @@ pub fn run() {
             commands::get_autostart,
             commands::get_log_path,
             commands::get_crash_log_path,
+            commands::check_crash_log,
+            commands::dismiss_crash_log,
+            commands::open_crash_report_email,
             commands::get_core_update_status,
             commands::check_core_update,
             commands::check_for_update,

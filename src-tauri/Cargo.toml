@@ -25,6 +25,8 @@ async-trait = "0.1"
 dirs = "6"
 notify = "6"
 rand = "0.8"
+urlencoding = "2"
+tauri-plugin-opener = "2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 synapt-core = { path = "../../synapt-core", version = "^0.2.2", features = ["updates", "portal-hotkey"] }

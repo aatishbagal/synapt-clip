@@ -208,6 +208,7 @@ export function Settings({ onClose }: SettingsProps) {
   // Null until a crash has actually been recorded, so the row stays hidden on
   // a healthy install.
   const [crashLogPath, setCrashLogPath] = useState<string | null>(null);
+  const [crashReports, setCrashReports] = useState(true);
 
   const coreUpdate = useCoreUpdate();
   const checkCoreUpdate = coreUpdate.check;
@@ -248,6 +249,17 @@ export function Settings({ onClose }: SettingsProps) {
     });
   };
 
+  const toggleCrashReports = (enabled: boolean) => {
+    setCrashReports(enabled);
+    invoke("set_setting", {
+      key: "crash_reports_enabled",
+      value: String(enabled),
+    }).catch((err) => {
+      setCrashReports(!enabled);
+      setSaveError(describeError(err, "Could not save that setting. Try again."));
+    });
+  };
+
   const installUpdate = useCallback(async () => {
     setUpdateState({ kind: "installing" });
     try {
@@ -266,6 +278,7 @@ export function Settings({ onClose }: SettingsProps) {
         setTheme(((s.theme as Theme) ?? "dark"));
         setHotkey(s.hotkey ?? "Super+Shift+V");
         setExcluded(parseExcluded(s.excluded_apps));
+        setCrashReports(s.crash_reports_enabled !== "false");
         const auto = s.auto_update_check !== "false";
         setAutoUpdate(auto);
         // Check on open when the preference allows it, so the section shows
@@ -955,6 +968,17 @@ export function Settings({ onClose }: SettingsProps) {
             <p className="text-xs" style={{ color: "var(--muted)" }}>
               Share {crashLogPath ? "these files" : "this file"} when reporting issues.
             </p>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={crashReports}
+                onChange={(e) => toggleCrashReports(e.target.checked)}
+                style={{ accentColor: "var(--accent)" }}
+              />
+              <span className="text-xs" style={{ color: "var(--muted)" }}>
+                Offer to email a crash report after a crash
+              </span>
+            </label>
           </div>
         </Section>
 

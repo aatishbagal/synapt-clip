@@ -12,6 +12,7 @@ import { GroupsView } from "./GroupsView";
 import { ContextMenu } from "./ContextMenu";
 import { DevicesSection } from "./DevicesSection";
 import { ClipReceivePopup } from "./ClipReceivePopup";
+import { CrashPopup, type CrashReport } from "./CrashPopup";
 import { EmptyState } from "./EmptyState";
 import { InlineConfirm } from "./InlineConfirm";
 import { describeError } from "../utils/errors";
@@ -67,6 +68,7 @@ export function Panel({ onOpenSettings }: PanelProps) {
   }, []);
   const [contextMenu, setContextMenu] = useState<ContextState>(null);
   const [receivePopup, setReceivePopup] = useState<ReceivedClip | null>(null);
+  const [crashReport, setCrashReport] = useState<CrashReport | null>(null);
   const [scrollToClipId, setScrollToClipId] = useState<number | null>(null);
   const [bridgeState, setBridgeState] = useState<BridgeState>({
     active: false,
@@ -131,6 +133,17 @@ export function Panel({ onOpenSettings }: PanelProps) {
 
   useEffect(() => {
     invoke<string>("get_app_version").then(setVersion).catch(() => setVersion(""));
+  }, []);
+
+  // Offer to report a crash from the previous session, unless crash report
+  // prompts are turned off in Settings. A missing setting means on.
+  useEffect(() => {
+    (async () => {
+      const settings = await invoke<Record<string, string>>("get_settings").catch(() => null);
+      if (settings?.crash_reports_enabled === "false") return;
+      const report = await invoke<CrashReport | null>("check_crash_log").catch(() => null);
+      if (report) setCrashReport(report);
+    })();
   }, []);
 
   useEffect(() => {
@@ -593,6 +606,17 @@ export function Panel({ onOpenSettings }: PanelProps) {
           scrollToId={scrollToClipId}
         />
       )}
+
+      <AnimatePresence>
+        {crashReport && (
+          <CrashPopup
+            key="crash-popup"
+            report={crashReport}
+            onSend={() => setCrashReport(null)}
+            onDismiss={() => setCrashReport(null)}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {receivePopup && (
