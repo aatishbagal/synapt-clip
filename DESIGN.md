@@ -465,6 +465,31 @@ Changing the setting needs a restart. Settings > Experimental offers "Restart no
 SynaptClip started with; switching back withdraws the offer. The switch is a checkbox, like
 every other boolean setting.
 
+## UX Rules
+
+Rules from the v0.6.0 Nielsen heuristics and WCAG 2.1 AA audit. The findings
+below are what that audit changed in the code; they are listed so the fixes are
+kept, not re-introduced.
+
+### Findings and resolutions
+
+- Visibility of system status (1): the clip list shows a loading state while history loads, and sending a clip to a device reports its result in a live region.
+- User control and freedom (3): clearing history now asks first through `InlineConfirm`, since it cannot be undone; Escape closes the context menu and the receive popup, as it does every other popup.
+- Consistency and standards (4): buttons, inputs, list rows, section headings and empty states share the classes and `EmptyState` component listed under Interactive States, instead of per-component styles.
+- Flexibility and efficiency (7): keyboard shortcuts are named in tooltips where they apply, such as "Copy (Enter)" and "Dismiss (Esc)" on the receive popup.
+- Error recovery (9): backend errors are no longer shown raw. `src/utils/errors.ts` turns them into a plain sentence with a next step, and every failed panel action is reported at the top of the panel instead of only in the console.
+- Accessibility: category tabs use `role="tablist"` and `aria-selected`, the context menu uses `role="menu"`, icon-only buttons carry `aria-label`, and a global `:focus-visible` ring makes keyboard focus visible everywhere.
+- Contrast (WCAG 2.1 AA): failing text tokens were adjusted to the smallest passing value; see the Contrast table under Colour Tokens.
+
+### Standing rules for future development
+
+- All destructive actions require a confirmation step
+- All error messages state what went wrong and what to do next
+- All inputs have inline validation before submission
+- All contrast ratios meet WCAG 2.1 AA minimums
+- Plain language only - no technical terms in user-facing strings
+- Every interactive element is keyboard accessible
+
 ## What Not To Do
 
 - Do not use accent colour on card borders, section dividers, or status indicators

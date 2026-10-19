@@ -157,7 +157,7 @@ export function Onboarding({ onDone }: OnboardingProps) {
       case "crash":
         return {
           heading: "Help improve SynaptClip",
-          body: "If the app crashes, you can send a report to help fix it. Reports are sent by email and contain no personal data.",
+          body: "If the app crashes, you can send a report to help fix it. Each report opens as an email draft, so you can read it before anything is sent.",
           actions: (
             <>
               <button

@@ -32,11 +32,21 @@ Captured text is stored locally and is never uploaded anywhere. You can delete i
 
 ## Network activity
 
-SynaptClip does not make any connections to the internet.
+Apart from update checks (described below), SynaptClip does not make any connections to the internet.
 
 SynaptClip listens on the loopback address (127.0.0.1, port 57322) for clips forwarded by Synapt, and contacts Synapt on the loopback address to list paired devices. These connections never leave your machine.
 
 When you explicitly send a clip to a paired device, SynaptClip hands the clip's text to Synapt, which transfers it to the target device over an encrypted connection on your local network. This only happens when you initiate it. Received clips are stored locally in your clipboard history and marked with the sender's device name.
+
+### Update checks
+
+SynaptClip checks GitHub for new versions of itself and of SynaptCore, the shared component it bundles. When automatic checks are on, a check runs 15 seconds after launch and each time you open Settings. A check also runs whenever you select Check for updates.
+
+Each check is a standard HTTPS request to github.com, api.github.com, and raw.githubusercontent.com that identifies the app and its version. Like any web request, it reveals your IP address to GitHub. It contains no personal data, files, clipboard content, or device identifiers. When you choose to install an update, the installer is downloaded from GitHub Releases.
+
+You can turn off automatic checks in Settings with the "Check for updates automatically" option. SynaptClip then contacts GitHub only when you select Check for updates.
+
+Links in the app, such as "See all changes" in the release notes, open in your default web browser. SynaptClip does not fetch them itself.
 
 ## Crash reports
 
