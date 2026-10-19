@@ -571,6 +571,54 @@ pub fn get_crash_log_path() -> Option<String> {
         .map(|p| p.to_string_lossy().to_string())
 }
 
+/// Settings key set once the first-launch setup flow has been finished.
+const ONBOARDING_COMPLETE_KEY: &str = "onboarding_complete";
+
+/// Whether onboarding is still pending for a stored `onboarding_complete` value.
+fn onboarding_pending(value: Option<&str>) -> bool {
+    value != Some("true")
+}
+
+/// Whether the first-launch setup flow still needs to run.
+#[tauri::command]
+pub async fn is_first_launch(state: State<'_, AppState>) -> Result<bool, String> {
+    let value = state
+        .db
+        .get_setting(ONBOARDING_COMPLETE_KEY)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(onboarding_pending(value.as_deref()))
+}
+
+/// Show and focus the panel. The panel starts hidden and is otherwise only
+/// summoned by the hotkey or tray, so the UI calls this on first launch to
+/// put the setup flow in front of the user.
+#[tauri::command]
+pub async fn show_main_window(app: AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "main window not found".to_string())?;
+    window.center().map_err(|e| e.to_string())?;
+    window.show().map_err(|e| e.to_string())?;
+    window.set_focus().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Read the clipboard once and discard the result, so an OS that gates
+/// clipboard access asks for permission while the setup flow explains why.
+/// An empty or non-text clipboard is not an error here.
+#[tauri::command]
+pub async fn request_clipboard_access() -> Result<(), String> {
+    tokio::task::spawn_blocking(|| {
+        let mut clipboard =
+            arboard::Clipboard::new().map_err(|e| format!("Failed to open clipboard: {e}"))?;
+        let _ = clipboard.get_text();
+        Ok::<(), String>(())
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
 /// Address the crash popup's report email goes to.
 const CRASH_REPORT_ADDRESS: &str = "synapt.reports@aatish.io";
 
@@ -1121,6 +1169,13 @@ mod tests {
         let json = serde_json::to_value(&r).expect("serialise");
         assert_eq!(json["transfer_id"], "transfer-9");
         assert_eq!(json["status"], "queued");
+    }
+
+    #[test]
+    fn onboarding_pending_until_marked_true() {
+        assert!(onboarding_pending(None));
+        assert!(onboarding_pending(Some("false")));
+        assert!(!onboarding_pending(Some("true")));
     }
 
     #[test]
