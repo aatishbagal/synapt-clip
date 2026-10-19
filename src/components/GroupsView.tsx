@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { ClipCard } from "./ClipCard";
+import { EmptyState } from "./EmptyState";
+import { describeError } from "../utils/errors";
 import type { Clip } from "../types/clip";
 
 interface GroupsViewProps {
@@ -10,13 +12,13 @@ interface GroupsViewProps {
 
 const BORDER = "var(--border)";
 const MUTED = "var(--muted)";
-const BADGE_BG = "var(--surface-hover)";
 const TEXT = "var(--text)";
 
 export function GroupsView({ onCopy }: GroupsViewProps) {
   const [groups, setGroups] = useState<number[][]>([]);
   const [clipsById, setClipsById] = useState<Map<number, Clip>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
   useEffect(() => {
@@ -38,7 +40,9 @@ export function GroupsView({ onCopy }: GroupsViewProps) {
         });
         setExpanded(openByDefault);
       } catch (err) {
-        console.error("Failed to load groups:", err);
+        if (!cancelled) {
+          setLoadError(describeError(err, "Switch tabs and back to try again."));
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -59,7 +63,7 @@ export function GroupsView({ onCopy }: GroupsViewProps) {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center" role="status">
         <p className="text-sm" style={{ color: MUTED }}>
           Loading groups...
         </p>
@@ -67,14 +71,16 @@ export function GroupsView({ onCopy }: GroupsViewProps) {
     );
   }
 
+  if (loadError) {
+    return <EmptyState title="Could not load groups" detail={loadError} />;
+  }
+
   if (groups.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center px-6">
-        <p className="text-sm text-center" style={{ color: MUTED }}>
-          No grouped clips yet. Groups form automatically when clips share a
-          source app or text prefix.
-        </p>
-      </div>
+      <EmptyState
+        title="No groups yet"
+        detail="Groups form automatically when clips share a source app or start the same way."
+      />
     );
   }
 
@@ -90,6 +96,7 @@ export function GroupsView({ onCopy }: GroupsViewProps) {
             <button
               type="button"
               className="w-full flex items-center gap-2 px-3 py-2 text-left"
+              aria-expanded={isOpen}
               onClick={() => toggle(i)}
             >
               {isOpen ? (
@@ -100,14 +107,8 @@ export function GroupsView({ onCopy }: GroupsViewProps) {
               <span className="text-xs" style={{ color: TEXT }}>
                 Group {i + 1}
               </span>
-              <span
-                className="text-xs px-1.5 py-0.5 rounded"
-                style={{
-                  color: MUTED,
-                  backgroundColor: BADGE_BG,
-                }}
-              >
-                {ids.length}
+              <span className="text-xs" style={{ color: MUTED }}>
+                {ids.length} {ids.length === 1 ? "clip" : "clips"}
               </span>
             </button>
             {isOpen && (

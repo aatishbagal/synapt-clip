@@ -3,6 +3,8 @@ import React, { useEffect, useRef, useState } from "react";
 interface InlineConfirmProps {
   message: string;
   confirmLabel?: string;
+  /** 'danger' (the default here) marks an action that discards something. */
+  tone?: "default" | "danger";
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -12,6 +14,7 @@ interface InlineConfirmProps {
 export function InlineConfirm({
   message,
   confirmLabel = "Delete",
+  tone = "danger",
   onConfirm,
   onCancel,
 }: InlineConfirmProps) {
@@ -37,13 +40,6 @@ export function InlineConfirm({
     }
   };
 
-  const buttonBase: React.CSSProperties = {
-    borderRadius: 4,
-    padding: "3px 10px",
-    fontSize: 12,
-    cursor: "pointer",
-  };
-
   return (
     <div
       onKeyDown={handleKeyDown}
@@ -55,32 +51,20 @@ export function InlineConfirm({
         padding: "8px 12px",
       }}
     >
-      <p style={{ color: "var(--text)", fontSize: 13 }}>{message}</p>
+      <p role="alert" style={{ color: "var(--text)", fontSize: 13 }}>{message}</p>
       <div className="flex items-center gap-2" style={{ marginTop: 8 }}>
+        {/* DESIGN.md: secondary-weight confirm (danger text for removals),
+            plain muted cancel. */}
         <button
           ref={confirmRef}
           type="button"
           onClick={onConfirm}
-          style={{
-            ...buttonBase,
-            backgroundColor: "var(--danger)",
-            color: "#fff",
-            border: "1px solid var(--danger)",
-          }}
+          className={tone === "danger" ? "btn btn-destructive" : "btn btn-secondary"}
+          style={tone === "danger" ? undefined : { color: "var(--accent)" }}
         >
           {confirmLabel}
         </button>
-        <button
-          ref={cancelRef}
-          type="button"
-          onClick={onCancel}
-          style={{
-            ...buttonBase,
-            backgroundColor: "transparent",
-            color: "var(--muted)",
-            border: "1px solid var(--border)",
-          }}
-        >
+        <button ref={cancelRef} type="button" onClick={onCancel} className="btn btn-ghost">
           Cancel
         </button>
       </div>

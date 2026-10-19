@@ -4,8 +4,6 @@ import type { Clip } from "../types/clip";
 import { buildHighlightSegments } from "../utils/highlight";
 import { relativeTime } from "../utils/time";
 
-const AUTO_CATEGORIES = new Set(["Link", "File Path", "Code", "Email", "Color"]);
-
 interface ClipCardProps {
   clip: Clip;
   onCopy: (id: number) => void;
@@ -96,31 +94,18 @@ export function ClipCard({
   const showCompressionStat =
     clip.was_compressed && clip.original_size > 0 && clip.compressed_size > 0;
 
+  // Keyboard selection and bulk selection share the DESIGN.md selected state.
   const highlighted = selected || isSelected;
-  const baseBg = highlighted ? "var(--surface-hover)" : "transparent";
-  const selectionBorder = isSelected ? "var(--accent)" : "var(--border)";
 
   return (
     <div
       onClick={handleCardClick}
       onContextMenu={handleContextMenu}
-      className="flex items-center gap-2 px-3 py-2.5 cursor-pointer transition-colors"
-      style={{
-        borderBottom: `1px solid ${selectionBorder}`,
-        backgroundColor: baseBg,
-      }}
-      onMouseEnter={(e) => {
-        if (!highlighted) {
-          (e.currentTarget as HTMLDivElement).style.backgroundColor =
-            "var(--surface-hover)";
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!highlighted) {
-          (e.currentTarget as HTMLDivElement).style.backgroundColor =
-            "transparent";
-        }
-      }}
+      data-selected={highlighted}
+      aria-selected={highlighted}
+      role="option"
+      title={bulkMode ? undefined : "Click to copy. Right-click for more actions."}
+      className="list-row flex items-center gap-2"
     >
       {bulkMode && (
         <input
@@ -133,7 +118,7 @@ export function ClipCard({
         />
       )}
 
-      <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+      <div className="flex-1 min-w-0 flex flex-col">
         <div className="flex items-baseline gap-2 min-w-0">
           <span
             className="truncate text-[13px]"
@@ -166,47 +151,14 @@ export function ClipCard({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        {/* Metadata is plain 12px muted text: no badges, no decorative bars. */}
+        <div className="flex items-center gap-2 text-xs" style={{ color: "var(--muted)" }}>
           {clip.source_app === "synapt" && (
-            <span
-              className="flex items-center"
-              style={{ color: "var(--muted)", fontSize: 11 }}
-            >
-              <span
-                className="inline-block"
-                style={{
-                  width: 20,
-                  height: 3,
-                  backgroundColor: "var(--accent-soft)",
-                  borderRadius: 2,
-                  marginRight: 5,
-                }}
-              />
-              From {clip.sender_name ?? "unknown device"}
-            </span>
+            <span>From {clip.sender_name ?? "unknown device"}</span>
           )}
-          {clip.category && (
-            <span
-              className="text-[10px] px-1.5 py-0.5 rounded"
-              style={
-                AUTO_CATEGORIES.has(clip.category)
-                  ? {
-                      backgroundColor: "var(--surface-hover)",
-                      color: "var(--muted)",
-                      border: "1px solid var(--border)",
-                    }
-                  : {
-                      backgroundColor: "var(--surface-hover)",
-                      color: "var(--accent)",
-                      border: "1px solid var(--accent)",
-                    }
-              }
-            >
-              {clip.category}
-            </span>
-          )}
+          {clip.category && <span>{clip.category}</span>}
           {showCompressionStat && (
-            <span className="text-xs" style={{ color: "var(--muted)" }}>
+            <span>
               {formatBytes(clip.original_size)} -&gt;{" "}
               {formatBytes(clip.compressed_size)}
             </span>
@@ -214,7 +166,7 @@ export function ClipCard({
         </div>
       </div>
 
-      <div className="flex items-center gap-1.5 shrink-0">
+      <div className="flex items-center gap-1 shrink-0">
         {clip.pinned && (
           <Pin
             size={12}
@@ -228,10 +180,11 @@ export function ClipCard({
 
         {!bulkMode && (
           <button
+            type="button"
             onClick={handleCopyButton}
-            title="Copy"
-            className="p-1 rounded transition-colors"
-            style={{ color: "var(--muted)" }}
+            title={copied ? "Copied" : "Copy"}
+            aria-label={copied ? "Copied" : "Copy clip"}
+            className="icon-button"
           >
             {copied ? (
               <Check size={14} style={{ color: "var(--success)" }} />
@@ -243,10 +196,11 @@ export function ClipCard({
 
         {!hideDelete && !bulkMode && (
           <button
+            type="button"
             onClick={handleDelete}
-            title="Delete"
-            className="p-1 rounded transition-colors"
-            style={{ color: "var(--muted)" }}
+            title="Delete (Undo is in the header)"
+            aria-label="Delete clip"
+            className="icon-button"
           >
             <Trash2 size={14} />
           </button>

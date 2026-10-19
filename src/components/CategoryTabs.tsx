@@ -33,41 +33,43 @@ export function CategoryTabs({
 
   // A tab is deletable only when the user created it. System categories are
   // built in and are turned off from Settings rather than removed.
+  // The label is a real button so tabs work from the keyboard. The delete
+  // control is a sibling (buttons cannot nest) and is shown on hover, on the
+  // active tab, and whenever it has keyboard focus.
   const renderTab = (id: string, label: string, deletable: boolean, isAuto: boolean) => {
     const isActive = active === id;
     return (
       <div
         key={id}
-        className="flex items-center gap-1 px-3 py-1.5 cursor-pointer shrink-0 group"
+        className="flex items-center gap-1 px-3 py-1.5 shrink-0 group"
         style={{
           color: isActive ? TEXT : MUTED,
           borderBottom: isActive ? `2px solid ${ACCENT}` : "2px solid transparent",
         }}
-        onClick={() => onChange(id)}
       >
-        <span className="text-xs">{label}</span>
-        {isAuto && (
-          <span
-            className="text-[9px] px-1 py-0.5 rounded"
-            style={{
-              color: MUTED,
-              border: `1px solid ${BORDER}`,
-              lineHeight: 1,
-            }}
-          >
-            auto
-          </span>
-        )}
+        <button
+          type="button"
+          role="tab"
+          aria-selected={isActive}
+          onClick={() => onChange(id)}
+          className="text-xs"
+          style={{ color: "inherit", background: "none", border: "none", padding: 0, cursor: "pointer" }}
+        >
+          {label}
+          {isAuto && <span style={{ color: MUTED }}> (auto)</span>}
+        </button>
         {deletable && (
           <button
             type="button"
-            className="opacity-0 group-hover:opacity-100 rounded"
+            className={`icon-button ${isActive ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"}`}
             onClick={(e) => {
               e.stopPropagation();
               setConfirmDelete(id);
             }}
             title="Delete category"
+            aria-label={`Delete category ${label}`}
             style={{
+              padding: 0,
               color: confirmDelete === id ? DANGER : MUTED,
             }}
           >
@@ -81,6 +83,8 @@ export function CategoryTabs({
   return (
     <div className="shrink-0" style={{ backgroundColor: TAB_BG }}>
       <div
+        role="tablist"
+        aria-label="Clip categories"
         className="category-tabs flex items-center overflow-x-auto"
         style={{ borderBottom: `1px solid ${BORDER}` }}
       >
@@ -91,7 +95,7 @@ export function CategoryTabs({
       </div>
 
       {confirmDelete !== null && (
-        <div style={{ padding: 8, borderBottom: `1px solid ${BORDER}` }}>
+        <div style={{ padding: "8px 12px", borderBottom: `1px solid ${BORDER}` }}>
           <InlineConfirm
             message={`Delete category "${confirmDelete}"? Clips in this category will not be deleted.`}
             onConfirm={() => {

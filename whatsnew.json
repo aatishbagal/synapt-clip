@@ -1,0 +1,123 @@
+{
+  "versions": [
+    {
+      "version": "0.6.0",
+      "date": "2026-10-19",
+      "headline": "Design system, animations, onboarding, and crash reporting.",
+      "highlights": [
+        "New design system with consistent spacing, typography, and interactive states",
+        "Spring animations on panels, dropdowns, and the overlay entrance",
+        "First-launch setup flow to get started quickly",
+        "Crash detection with opt-in email reporting",
+        "What is new modal after each update"
+      ]
+    },
+    {
+      "version": "0.5.4",
+      "date": "2026-10-17",
+      "headline": "The global hotkey now works on GNOME Wayland, and category tabs are easier to read.",
+      "highlights": [
+        "The global hotkey now works on GNOME Wayland, no Xorg session needed",
+        "The category tab scrollbar is now a thin line that no longer covers tab names",
+        "Settings now shows the SynaptCore version and warns if it needs an update"
+      ]
+    },
+    {
+      "version": "0.5.3",
+      "date": "2026-10-16",
+      "headline": "Clips sort themselves into categories.",
+      "highlights": [
+        "Links, emails, phone numbers, file paths, colors, and code are sorted into categories automatically",
+        "Turn each automatic category on or off in Settings",
+        "Deleting a category you created now asks for confirmation"
+      ]
+    },
+    {
+      "version": "0.5.2",
+      "date": "2026-08-28",
+      "headline": "SynaptClip now updates itself.",
+      "highlights": [
+        "SynaptClip now updates itself, with an option to check automatically",
+        "If SynaptClip crashes, details are saved to help diagnose the problem"
+      ]
+    },
+    {
+      "version": "0.5.1",
+      "date": "2026-08-25",
+      "headline": "See clips the moment they arrive from another device.",
+      "highlights": [
+        "A popup shows clips received from your other devices, with copy and view options",
+        "Command and Option shortcuts now record correctly on macOS",
+        "Cmd+Q no longer quits SynaptClip by accident; quit from the menu bar icon instead"
+      ]
+    },
+    {
+      "version": "0.5.0",
+      "date": "2026-08-21",
+      "headline": "Share clipboard items between devices with Synapt.",
+      "highlights": [
+        "When Synapt is running, your paired devices appear in the panel",
+        "Right-click any clip to send it to another device",
+        "Now available for Mac as a signed universal app"
+      ]
+    },
+    {
+      "version": "0.4.1",
+      "date": "2026-06-04",
+      "headline": "Better GNOME Wayland support and a shared tray icon.",
+      "highlights": [
+        "Clipboard capture on GNOME Wayland now detects the Clipboard History extension correctly",
+        "Turn start on login on or off from Settings",
+        "SynaptClip and Synapt share a single tray icon"
+      ]
+    },
+    {
+      "version": "0.4.0",
+      "date": null,
+      "headline": "Open SynaptClip from anywhere.",
+      "highlights": [
+        "Open the panel from anywhere with a global hotkey",
+        "SynaptClip starts automatically when you log in on Linux",
+        "A short setup guide on first launch"
+      ]
+    },
+    {
+      "version": "0.3.1",
+      "date": null,
+      "headline": "Settings in its own window.",
+      "highlights": [
+        "Settings now opens in a separate window",
+        "The panel reopens centred on screen every time"
+      ]
+    },
+    {
+      "version": "0.3.0",
+      "date": null,
+      "headline": "Settings and themes.",
+      "highlights": [
+        "A Settings page for your preferences",
+        "Choose a light or dark theme",
+        "Hover the tray icon to see SynaptClip's status"
+      ]
+    },
+    {
+      "version": "0.2.0",
+      "date": null,
+      "headline": "Search, organise, and undo.",
+      "highlights": [
+        "Search your clipboard history, with typo-tolerant matching and highlighted results",
+        "Pin clips, sort them into categories, and act on many at once",
+        "Undo a deleted clip, and capture the clipboard on Wayland"
+      ]
+    },
+    {
+      "version": "0.1.0",
+      "date": null,
+      "headline": "The first SynaptClip release.",
+      "highlights": [
+        "SynaptClip keeps a history of everything you copy",
+        "Search your history from a quick panel that hides when you click away"
+      ]
+    }
+  ]
+}

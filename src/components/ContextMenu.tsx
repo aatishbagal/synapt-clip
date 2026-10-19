@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { motion } from "motion/react";
+import { SPRING_GENTLE } from "../animations";
 import type { Category, Clip } from "../types/clip";
 import type { SynaptPeer } from "../types/synapt";
 
@@ -94,7 +96,7 @@ export function ContextMenu({
     const status = sendStatus[peer.id] ?? "idle";
     if (status === "sending") return "Sending...";
     if (status === "sent") return "Sent";
-    if (status === "failed") return "Failed";
+    if (status === "failed") return "Could not send";
     return peer.name;
   };
 
@@ -104,24 +106,40 @@ export function ContextMenu({
         onClose();
       }
     };
+    // Escape closes the menu, as it does for every other popup.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+      }
+    };
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("keydown", onKey, true);
+    };
   }, [onClose]);
 
   const itemClass =
     "w-full text-left px-3 py-1.5 text-xs flex items-center justify-between transition-colors";
 
   return (
-    <div
+    <motion.div
       ref={ref}
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={SPRING_GENTLE}
+      role="menu"
       className="absolute z-50 rounded"
       style={{
+        transformOrigin: "top left",
         left: x,
         top: y,
         minWidth: 180,
         backgroundColor: MENU_BG,
         border: `1px solid ${MENU_BORDER}`,
-        boxShadow: "0 6px 16px rgba(0, 0, 0, 0.5)",
         color: TEXT,
       }}
     >
@@ -168,6 +186,10 @@ export function ContextMenu({
       >
         <button
           type="button"
+          // Click or Enter opens the submenu too, so it is reachable without hover.
+          onClick={() => setShowSubmenu((open) => !open)}
+          aria-haspopup="menu"
+          aria-expanded={showSubmenu}
           className={itemClass}
           style={{
             color: TEXT,
@@ -185,8 +207,7 @@ export function ContextMenu({
               minWidth: 180,
               backgroundColor: MENU_BG,
               border: `1px solid ${MENU_BORDER}`,
-              boxShadow: "0 6px 16px rgba(0, 0, 0, 0.5)",
-            }}
+                  }}
           >
             {categories.length === 0 && (
               <div className="px-3 py-1.5 text-xs" style={{ color: MUTED }}>
@@ -323,6 +344,6 @@ export function ContextMenu({
           })}
         </>
       )}
-    </div>
+    </motion.div>
   );
 }

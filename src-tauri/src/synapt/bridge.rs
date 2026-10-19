@@ -133,8 +133,13 @@ pub async fn start(
 
 /// Return true when Synapt answers `/v1/health` with a success status.
 async fn poll_health(client: &Client) -> bool {
+    poll_health_at(client, SYNAPT_API).await
+}
+
+/// Return true when the API at `base` answers `/v1/health` with a success status.
+async fn poll_health_at(client: &Client, base: &str) -> bool {
     client
-        .get(format!("{SYNAPT_API}/v1/health"))
+        .get(format!("{base}/v1/health"))
         .send()
         .await
         .map(|r| r.status().is_success())
@@ -220,12 +225,17 @@ mod tests {
 
     #[tokio::test]
     async fn poll_health_false_when_nothing_listening() {
-        // Nothing is bound to 57321 in the test environment, so the connection
-        // is refused and poll_health must report inactive without panicking.
+        // Bind an ephemeral port and release it so the address is known to be
+        // closed, independent of whether Synapt is running on this machine.
+        let port = std::net::TcpListener::bind("127.0.0.1:0")
+            .expect("bind")
+            .local_addr()
+            .expect("local addr")
+            .port();
         let client = Client::builder()
             .timeout(Duration::from_millis(500))
             .build()
             .expect("client");
-        assert!(!poll_health(&client).await);
+        assert!(!poll_health_at(&client, &format!("http://127.0.0.1:{port}")).await);
     }
 }

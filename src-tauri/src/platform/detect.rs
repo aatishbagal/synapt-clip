@@ -154,6 +154,9 @@ pub struct BackendStatusInfo {
     pub session: String,
     /// Human-readable description of the detected backend.
     pub detail: String,
+    /// What the user still has to do: `ready` | `gch_not_installed` |
+    /// `gch_not_enabled` | `unsupported`.
+    pub setup: String,
 }
 
 /// Compute the session string for the current process.
@@ -186,6 +189,12 @@ fn session_string() -> String {
 #[tauri::command]
 pub fn get_backend_status() -> BackendStatusInfo {
     let backend = detect_backend();
+    let setup = match backend {
+        ClipboardBackend::GchNotInstalled => "gch_not_installed",
+        ClipboardBackend::GchNotEnabled => "gch_not_enabled",
+        ClipboardBackend::Unsupported => "unsupported",
+        _ => "ready",
+    };
     let (backend_str, detail) = match backend {
         ClipboardBackend::Arboard => (
             "arboard",
@@ -217,6 +226,7 @@ pub fn get_backend_status() -> BackendStatusInfo {
         backend: backend_str.to_string(),
         session: session_string(),
         detail,
+        setup: setup.to_string(),
     }
 }
 
@@ -252,5 +262,6 @@ mod tests {
         assert!(json.contains("\"backend\""));
         assert!(json.contains("\"session\""));
         assert!(json.contains("\"detail\""));
+        assert!(json.contains("\"setup\""));
     }
 }
