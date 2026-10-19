@@ -118,6 +118,7 @@ Declared once in a separate `:root` block because the value is the same in both 
 | Token | Value | Use |
 |---|---|---|
 | `--on-accent` | `#ffffff` | Text on accent- or danger-filled buttons |
+| `--backdrop` | `rgba(0, 0, 0, 0.6)` | What's New modal backdrop |
 
 All other tokens except the fills differ between dark and light. The themed token set and
 values are identical to Synapt's; Synapt additionally defines `--backdrop`.
@@ -296,6 +297,7 @@ Tailwind `transition-colors` and the `.panel-root` fade now use `--ease-standard
 - 50 (`z-50`) - context menu
 - 500 - receive popup
 - 1000 - Select popup
+- 2000 - What's New modal
 
 ## Panel Layout
 

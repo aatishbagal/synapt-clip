@@ -8,6 +8,8 @@ import { X } from "lucide-react";
 import { Select } from "./Select";
 import { InlineConfirm } from "./InlineConfirm";
 import { ExperimentalSettings } from "./ExperimentalSettings";
+import { WhatsNewModal, type WhatsNewEntry } from "./WhatsNewModal";
+import { AnimatePresence } from "motion/react";
 import type { Category } from "../types/clip";
 import { UnderlineLoader } from "./UnderlineLoader";
 import { describeError } from "../utils/errors";
@@ -209,6 +211,7 @@ export function Settings({ onClose }: SettingsProps) {
   // a healthy install.
   const [crashLogPath, setCrashLogPath] = useState<string | null>(null);
   const [crashReports, setCrashReports] = useState(true);
+  const [releaseNotes, setReleaseNotes] = useState<WhatsNewEntry | null>(null);
 
   const coreUpdate = useCoreUpdate();
   const checkCoreUpdate = coreUpdate.check;
@@ -247,6 +250,18 @@ export function Settings({ onClose }: SettingsProps) {
       setAutoUpdate(!enabled);
       setSaveError(describeError(err, "Could not save that setting. Try again."));
     });
+  };
+
+  const showReleaseNotes = () => {
+    invoke<WhatsNewEntry[]>("get_whats_new")
+      .then((versions) => setReleaseNotes(versions[0] ?? null))
+      .catch((err) => setSaveError(describeError(err, "Could not load the release notes.")));
+  };
+
+  const openChangelog = () => {
+    invoke("open_changelog").catch((err) =>
+      setSaveError(describeError(err, "Could not open the changelog in your browser.")),
+    );
   };
 
   const toggleCrashReports = (enabled: boolean) => {
@@ -877,6 +892,9 @@ export function Settings({ onClose }: SettingsProps) {
               <p className="text-xs" style={{ color: "var(--muted)" }}>
                 Version {appVersion}
               </p>
+              <button type="button" onClick={showReleaseNotes} className="btn btn-secondary self-start mt-1">
+                See release notes
+              </button>
             </div>
 
             <div
@@ -986,6 +1004,17 @@ export function Settings({ onClose }: SettingsProps) {
           <ExperimentalSettings />
         </Section>
       </div>
+
+      <AnimatePresence>
+        {releaseNotes && (
+          <WhatsNewModal
+            key="whats-new"
+            data={releaseNotes}
+            onDismiss={() => setReleaseNotes(null)}
+            onSeeAll={openChangelog}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

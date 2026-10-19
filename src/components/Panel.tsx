@@ -13,6 +13,7 @@ import { ContextMenu } from "./ContextMenu";
 import { DevicesSection } from "./DevicesSection";
 import { ClipReceivePopup } from "./ClipReceivePopup";
 import { CrashPopup, type CrashReport } from "./CrashPopup";
+import { WhatsNewModal, type WhatsNewEntry } from "./WhatsNewModal";
 import { EmptyState } from "./EmptyState";
 import { InlineConfirm } from "./InlineConfirm";
 import { describeError } from "../utils/errors";
@@ -69,6 +70,8 @@ export function Panel({ onOpenSettings }: PanelProps) {
   const [contextMenu, setContextMenu] = useState<ContextState>(null);
   const [receivePopup, setReceivePopup] = useState<ReceivedClip | null>(null);
   const [crashReport, setCrashReport] = useState<CrashReport | null>(null);
+  // The latest release notes and the running version they are shown for.
+  const [whatsNew, setWhatsNew] = useState<{ entry: WhatsNewEntry; version: string } | null>(null);
   const [scrollToClipId, setScrollToClipId] = useState<number | null>(null);
   const [bridgeState, setBridgeState] = useState<BridgeState>({
     active: false,
@@ -134,6 +137,43 @@ export function Panel({ onOpenSettings }: PanelProps) {
   useEffect(() => {
     invoke<string>("get_app_version").then(setVersion).catch(() => setVersion(""));
   }, []);
+
+  // Show the latest release notes once per version, on the first launch after
+  // an update. A fresh install never gets here before onboarding, which marks
+  // the current version as seen.
+  useEffect(() => {
+    (async () => {
+      try {
+        const [versions, lastSeen, current] = await Promise.all([
+          invoke<WhatsNewEntry[]>("get_whats_new"),
+          invoke<string | null>("get_last_seen_version"),
+          invoke<string>("get_app_version"),
+        ]);
+        const latest = versions[0];
+        if (lastSeen !== current && latest) {
+          setWhatsNew({ entry: latest, version: current });
+        }
+      } catch (err) {
+        console.error("Failed to load release notes:", err);
+      }
+    })();
+  }, []);
+
+  const dismissWhatsNew = useCallback(() => {
+    if (whatsNew) {
+      // A failed write only means the notes show again next launch.
+      invoke("set_last_seen_version", { version: whatsNew.version }).catch((err) =>
+        console.error("Failed to record seen release notes:", err),
+      );
+    }
+    setWhatsNew(null);
+  }, [whatsNew]);
+
+  const openChangelog = useCallback(() => {
+    invoke("open_changelog").catch((err) =>
+      report(err, "Could not open the changelog in your browser."),
+    );
+  }, [report]);
 
   // Offer to report a crash from the previous session, unless crash report
   // prompts are turned off in Settings. A missing setting means on.
@@ -634,6 +674,17 @@ export function Panel({ onOpenSettings }: PanelProps) {
               setReceivePopup(null);
             }}
             onDismiss={() => setReceivePopup(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {whatsNew && (
+          <WhatsNewModal
+            key="whats-new"
+            data={whatsNew.entry}
+            onDismiss={dismissWhatsNew}
+            onSeeAll={openChangelog}
           />
         )}
       </AnimatePresence>

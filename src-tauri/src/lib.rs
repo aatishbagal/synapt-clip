@@ -535,6 +535,7 @@ pub fn run() {
             commands::get_whats_new,
             commands::get_last_seen_version,
             commands::set_last_seen_version,
+            commands::open_changelog,
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

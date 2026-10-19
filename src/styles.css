@@ -69,6 +69,7 @@
    once rather than repeated in every theme block. */
 :root {
   --on-accent: #ffffff;
+  --backdrop: rgba(0, 0, 0, 0.6);
 
   --ease-standard: cubic-bezier(0.25, 0.1, 0.25, 1.0);
   --ease-decelerate: cubic-bezier(0.0, 0.0, 0.2, 1.0);

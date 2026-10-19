@@ -34,6 +34,11 @@ export function App() {
         applyTheme(((s.theme as Theme) ?? "dark"));
         if (!isSettings && (!s.first_run || s.first_run !== "done")) {
           setShowOnboarding(true);
+          // A fresh install has nothing new to announce, so the What's New
+          // modal waits for the first update instead of following onboarding.
+          invoke<string>("get_app_version")
+            .then((version) => invoke("set_last_seen_version", { version }))
+            .catch((err) => console.error("Failed to record seen release notes:", err));
         }
       })
       .catch(() => applyTheme("dark"));
