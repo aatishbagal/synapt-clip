@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 regex = "1"
-tauri = { version = "2", features = ["tray-icon"] }
+tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
 synapt-core = { path = "../../synapt-core", version = "^0.2.2", features = ["updates"] }
 tauri-plugin-shell = "2"
 tauri-plugin-global-shortcut = "2"

@@ -8,6 +8,7 @@ import { X } from "lucide-react";
 import { Select } from "./Select";
 import { InlineConfirm } from "./InlineConfirm";
 import { ExperimentalSettings } from "./ExperimentalSettings";
+import { EXPERIMENTAL_UI_AVAILABLE } from "../experimental";
 import { WhatsNewModal, type WhatsNewEntry } from "./WhatsNewModal";
 import { AnimatePresence } from "motion/react";
 import type { Category } from "../types/clip";
@@ -1000,9 +1001,11 @@ export function Settings({ onClose }: SettingsProps) {
           </div>
         </Section>
 
-        <Section title="Experimental">
-          <ExperimentalSettings />
-        </Section>
+        {EXPERIMENTAL_UI_AVAILABLE && (
+          <Section title="Experimental">
+            <ExperimentalSettings />
+          </Section>
+        )}
       </div>
 
       <AnimatePresence>

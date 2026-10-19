@@ -255,6 +255,13 @@ pub fn run() {
             });
 
             if let Some(window) = app.get_webview_window("main") {
+                // The panel window is transparent so only the rounded panel
+                // root shows; AppKit would otherwise draw a default shadow that
+                // reads as a faint square halo around it.
+                #[cfg(target_os = "macos")]
+                if let Err(e) = window.set_shadow(false) {
+                    tracing::warn!("macOS: failed to disable window shadow: {e}");
+                }
                 let w = window.clone();
                 window.on_window_event(move |event| match event {
                     tauri::WindowEvent::Focused(false) => {

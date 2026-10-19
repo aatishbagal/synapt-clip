@@ -326,14 +326,16 @@ Current code differs: the panel is centred on every show (`window.center()` in
 
 ### macOS
 
-- Window is frameless
+- Window is transparent and frameless, with the AppKit shadow disabled
 - No Dock icon (NSApplication activation policy: Accessory)
 - Tray icon in menu bar - single icon shared with Synapt
 - Corner radius on the panel: 8px CSS matches system expectation
 - System accent colour not used - app uses its own accent token
 
-Current code differs: the main window is not transparent (`transparent` is unset and
-`body` paints `--bg`), so the 8px CSS radius on the panel root sits inside a square window.
+The panel window is transparent (`macOSPrivateApi` is enabled for it), and its `body`
+stays transparent through `html[data-window="panel"]`, so only the 8px-rounded panel root
+paints. A hidden panel therefore leaves no frame behind to flash on its next show. The
+Settings window is opaque and keeps the `--bg` body.
 
 ### Windows
 
@@ -453,6 +455,10 @@ No shadow. Items are buttons; the Assign Category submenu opens on hover, click 
 `--border` outline and no shadow. Copy is `.btn-primary`, View `.btn-secondary`, Dismiss `.btn-ghost`; Enter copies and Escape dismisses.
 
 ## Experimental UI
+
+Hidden for now: `EXPERIMENTAL_UI_AVAILABLE` in `src/experimental.ts` is `false`, which
+removes the Settings section and ignores a saved `experimental_ui` value. Set it to `true`
+to bring both back. The rest of this section describes the flag when it is available.
 
 The `experimental_ui` setting (default `false`, seeded by a migration) is read once when a
 webview starts (`src/experimental.ts`) and, when on, sets `data-experimental-ui="true"` on

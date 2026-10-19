@@ -118,6 +118,14 @@ body {
     "Helvetica Neue", Arial, sans-serif;
 }
 
+/* The panel window is transparent, so its body stays transparent and the
+   panel root paints var(--bg) with rounded corners; a hidden panel then leaves
+   nothing on screen to flash when it is shown again. The Settings window is an
+   ordinary opaque window and keeps the --bg body. */
+html[data-window="panel"] body {
+  background-color: transparent;
+}
+
 /* Horizontal category tab list: the global thin scrollbar applies; reserve
    room for it so it never covers labels, and keep its thumb at 1px radius. */
 .category-tabs {

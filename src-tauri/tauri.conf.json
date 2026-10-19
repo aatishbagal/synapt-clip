@@ -10,6 +10,7 @@
     "beforeBuildCommand": "npm run build"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "label": "main",
@@ -18,6 +19,7 @@
         "height": 480,
         "resizable": false,
         "decorations": false,
+        "transparent": true,
         "alwaysOnTop": true,
         "visible": false,
         "center": true
