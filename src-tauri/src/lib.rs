@@ -2,6 +2,7 @@ mod category_detect;
 mod clipboard;
 mod commands;
 mod crash;
+mod entrance;
 mod dsa;
 mod hotkey;
 mod platform;
@@ -257,14 +258,14 @@ pub fn run() {
                 let w = window.clone();
                 window.on_window_event(move |event| match event {
                     tauri::WindowEvent::Focused(false) => {
-                        let _ = w.hide();
+                        entrance::hide(&w);
                     }
                     // The panel is undecorated so it has no close button, but a
                     // close can still be requested (Cmd+W, or the OS tearing the
                     // window down). Hide it instead: quitting is tray-only.
                     tauri::WindowEvent::CloseRequested { api, .. } => {
                         api.prevent_close();
-                        let _ = w.hide();
+                        entrance::hide(&w);
                     }
                     _ => {}
                 });
@@ -522,6 +523,7 @@ pub fn run() {
             commands::get_crash_log_path,
             commands::is_first_launch,
             commands::show_main_window,
+            commands::hide_window,
             commands::request_clipboard_access,
             commands::check_crash_log,
             commands::dismiss_crash_log,

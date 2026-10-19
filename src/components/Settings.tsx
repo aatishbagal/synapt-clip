@@ -1009,6 +1009,7 @@ export function Settings({ onClose }: SettingsProps) {
         {releaseNotes && (
           <WhatsNewModal
             key="whats-new"
+            title="What's new in SynaptClip"
             data={releaseNotes}
             onDismiss={() => setReleaseNotes(null)}
             onSeeAll={openChangelog}

@@ -515,6 +515,16 @@ pub async fn open_settings(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Hide the panel, resetting it first so its next show animates cleanly.
+#[tauri::command]
+pub async fn hide_window(app: AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "main window not found".to_string())?;
+    crate::entrance::hide(&window);
+    Ok(())
+}
+
 /// Hide the dedicated settings window.
 #[tauri::command]
 pub async fn close_settings(app: AppHandle) -> Result<(), String> {
@@ -598,6 +608,7 @@ pub async fn show_main_window(app: AppHandle) -> Result<(), String> {
     let window = app
         .get_webview_window("main")
         .ok_or_else(|| "main window not found".to_string())?;
+    crate::entrance::note_show();
     window.center().map_err(|e| e.to_string())?;
     window.show().map_err(|e| e.to_string())?;
     window.set_focus().map_err(|e| e.to_string())?;

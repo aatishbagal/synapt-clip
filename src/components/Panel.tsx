@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Trash2, Undo2, CheckSquare, X, Settings as SettingsIcon } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { SearchBar } from "./SearchBar";
@@ -369,7 +368,7 @@ export function Panel({ onOpenSettings }: PanelProps) {
 
   const handleEscape = useCallback(() => {
     if (isSearching) handleClearSearch();
-    else getCurrentWindow().hide();
+    else invoke("hide_window").catch((err) => console.error("Failed to hide the panel:", err));
   }, [isSearching, handleClearSearch]);
 
   const clipsById = new Map(clips.map((c) => [c.id, c] as const));
@@ -682,6 +681,7 @@ export function Panel({ onOpenSettings }: PanelProps) {
         {whatsNew && (
           <WhatsNewModal
             key="whats-new"
+            title="SynaptClip was updated"
             data={whatsNew.entry}
             onDismiss={dismissWhatsNew}
             onSeeAll={openChangelog}
