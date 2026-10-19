@@ -2,6 +2,7 @@ mod category_detect;
 mod clipboard;
 mod commands;
 mod crash;
+mod entrance;
 mod dsa;
 mod hotkey;
 mod platform;
@@ -209,6 +210,7 @@ pub fn run() {
     };
     builder
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState {
             db: db.clone(),
@@ -253,17 +255,24 @@ pub fn run() {
             });
 
             if let Some(window) = app.get_webview_window("main") {
+                // The panel window is transparent so only the rounded panel
+                // root shows; AppKit would otherwise draw a default shadow that
+                // reads as a faint square halo around it.
+                #[cfg(target_os = "macos")]
+                if let Err(e) = window.set_shadow(false) {
+                    tracing::warn!("macOS: failed to disable window shadow: {e}");
+                }
                 let w = window.clone();
                 window.on_window_event(move |event| match event {
                     tauri::WindowEvent::Focused(false) => {
-                        let _ = w.hide();
+                        entrance::hide(&w);
                     }
                     // The panel is undecorated so it has no close button, but a
                     // close can still be requested (Cmd+W, or the OS tearing the
                     // window down). Hide it instead: quitting is tray-only.
                     tauri::WindowEvent::CloseRequested { api, .. } => {
                         api.prevent_close();
-                        let _ = w.hide();
+                        entrance::hide(&w);
                     }
                     _ => {}
                 });
@@ -503,6 +512,7 @@ pub fn run() {
             commands::clear_history,
             commands::get_settings,
             commands::set_setting,
+            commands::restart_app,
             commands::get_platform_info,
             commands::get_hotkey_status,
             commands::get_hotkey_info,
@@ -518,6 +528,13 @@ pub fn run() {
             commands::get_autostart,
             commands::get_log_path,
             commands::get_crash_log_path,
+            commands::is_first_launch,
+            commands::show_main_window,
+            commands::hide_window,
+            commands::request_clipboard_access,
+            commands::check_crash_log,
+            commands::dismiss_crash_log,
+            commands::open_crash_report_email,
             commands::get_core_update_status,
             commands::check_core_update,
             commands::check_for_update,
@@ -527,6 +544,10 @@ pub fn run() {
             commands::refresh_bridge_peers,
             commands::send_clip_to_peer,
             commands::send_latest_clip_to_peer,
+            commands::get_whats_new,
+            commands::get_last_seen_version,
+            commands::set_last_seen_version,
+            commands::open_changelog,
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

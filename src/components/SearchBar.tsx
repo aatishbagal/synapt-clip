@@ -7,11 +7,13 @@ interface SearchBarProps {
   onResults: (results: SearchResult[], query: string) => void;
   onClear: () => void;
   onEscape: () => void;
+  /** Called when a search fails, so the panel can explain it. */
+  onError?: (err: unknown) => void;
 }
 
 const DEBOUNCE_MS = 150;
 
-export function SearchBar({ onResults, onClear, onEscape }: SearchBarProps) {
+export function SearchBar({ onResults, onClear, onEscape, onError }: SearchBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const timeoutRef = useRef<number | null>(null);
   const [query, setQuery] = useState("");
@@ -43,13 +45,13 @@ export function SearchBar({ onResults, onClear, onEscape }: SearchBarProps) {
           onResults(results, trimmed);
         })
         .catch((err: unknown) => {
-          console.error("search_clips failed:", err);
+          onError?.(err);
         })
         .finally(() => {
           setLoading(false);
         });
     },
-    [onClear, onResults],
+    [onClear, onResults, onError],
   );
 
   const handleChange = useCallback(
@@ -89,43 +91,44 @@ export function SearchBar({ onResults, onClear, onEscape }: SearchBarProps) {
     [query, handleClear, onEscape],
   );
 
+  // Header and search share one --bg surface; the field itself is the
+  // DESIGN.md input (--surface, 1px border, 8px radius, accent border on focus).
   return (
-    <div
-      className="flex items-center gap-2 px-3 shrink-0"
-      style={{
-        height: "48px",
-        backgroundColor: "var(--surface)",
-        borderBottom: "1px solid var(--border)",
-      }}
-    >
-      <Search size={16} style={{ color: "var(--muted)" }} className="shrink-0" />
-      <input
-        ref={inputRef}
-        type="text"
-        value={query}
-        onChange={handleChange}
-        onKeyDown={handleKeyDown}
-        placeholder="Search clips..."
-        className="flex-1 bg-transparent text-sm outline-none"
-        style={{ color: "var(--text)" }}
-      />
-      {loading && (
-        <Loader2
-          size={14}
-          className="animate-spin shrink-0"
-          style={{ color: "var(--muted)" }}
+    <div className="px-3 pb-2 shrink-0" style={{ backgroundColor: "var(--bg)" }}>
+      <label className="input flex items-center gap-2 cursor-text">
+        <Search size={16} style={{ color: "var(--muted)" }} className="shrink-0" aria-hidden />
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          aria-label="Search clips"
+          placeholder="Search clips..."
+          className="flex-1 min-w-0 bg-transparent text-sm outline-none"
+          style={{ color: "var(--text)" }}
         />
-      )}
-      {query && !loading && (
-        <button
-          onClick={handleClear}
-          title="Clear"
-          className="p-1 rounded transition-colors"
-          style={{ color: "var(--muted)" }}
-        >
-          <X size={14} />
-        </button>
-      )}
+        {loading && (
+          <Loader2
+            size={14}
+            role="status"
+            aria-label="Searching"
+            className="animate-spin shrink-0"
+            style={{ color: "var(--muted)" }}
+          />
+        )}
+        {query && !loading && (
+          <button
+            type="button"
+            onClick={handleClear}
+            title="Clear search"
+            aria-label="Clear search"
+            className="icon-button"
+          >
+            <X size={14} />
+          </button>
+        )}
+      </label>
     </div>
   );
 }

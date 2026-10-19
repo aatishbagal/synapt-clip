@@ -52,6 +52,7 @@ fn activate(app: &AppHandle, token: Option<String>, timestamp: u32) {
     let handle = app.clone();
     if let Err(error) = app.run_on_main_thread(move || {
         if let Some(window) = handle.get_webview_window("main") {
+            crate::entrance::note_show();
             let _ = window.center();
             #[cfg(target_os = "linux")]
             if uses_portal() {

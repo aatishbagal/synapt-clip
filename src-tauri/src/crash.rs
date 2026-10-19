@@ -5,7 +5,7 @@ use std::panic;
 use std::path::PathBuf;
 
 /// Name shown at the top of the report.
-const APP_NAME: &str = "SynaptClip";
+pub const APP_NAME: &str = "SynaptClip";
 /// Directory under the platform data dir that holds the log.
 const DATA_DIR: &str = "synaptclip";
 /// Where the user is asked to file the report.

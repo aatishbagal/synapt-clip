@@ -1,9 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { X } from "lucide-react";
+import { motion, useIsPresent } from "motion/react";
+import { SPRING } from "../animations";
 
 const AUTO_DISMISS_MS = 8000;
-const EXIT_MS = 150;
+
+// Exit settles faster than the entrance: stiffer, still critically damped.
+const SPRING_EXIT = { ...SPRING, stiffness: 400, damping: 40 };
 
 interface ClipReceivePopupProps {
   clip_id: number;
@@ -30,38 +34,30 @@ export function ClipReceivePopup({
   onDismiss,
 }: ClipReceivePopupProps) {
   const [paused, setPaused] = useState(false);
-  const [leaving, setLeaving] = useState(false);
-  // The exit animation runs before the parent unmounts us, so every dismissal
-  // path goes through here and the popup is never yanked off screen.
-  const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const leave = useCallback((after: () => void) => {
-    setLeaving((already) => {
-      if (already) return already;
-      exitTimer.current = setTimeout(after, EXIT_MS);
-      return true;
-    });
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (exitTimer.current) clearTimeout(exitTimer.current);
-    };
-  }, []);
+  // The parent wraps us in AnimatePresence, so once dismissed we stay mounted
+  // for the exit animation. While exiting, ignore further actions so a second
+  // Enter or Escape cannot copy or dismiss twice.
+  const isPresent = useIsPresent();
 
   const handleCopy = useCallback(() => {
+    if (!isPresent) return;
     invoke("copy_clip", { id: clip_id }).catch((err) =>
       console.error("Failed to copy received clip:", err),
     );
-    leave(onCopy);
-  }, [clip_id, leave, onCopy]);
+    onCopy();
+  }, [clip_id, isPresent, onCopy]);
 
-  const handleView = useCallback(() => leave(onView), [leave, onView]);
-  const handleDismiss = useCallback(() => leave(onDismiss), [leave, onDismiss]);
+  const handleView = useCallback(() => {
+    if (isPresent) onView();
+  }, [isPresent, onView]);
+  const handleDismiss = useCallback(() => {
+    if (isPresent) onDismiss();
+  }, [isPresent, onDismiss]);
 
   // Captured at the document level so the popup answers Escape and Enter before
   // the search field does. Once it is gone those keys behave normally again.
   useEffect(() => {
+    if (!isPresent) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "Escape" && e.key !== "Enter") return;
       e.preventDefault();
@@ -71,20 +67,14 @@ export function ClipReceivePopup({
     };
     document.addEventListener("keydown", onKeyDown, true);
     return () => document.removeEventListener("keydown", onKeyDown, true);
-  }, [handleCopy, handleDismiss]);
-
-  const buttonBase = {
-    flex: 1,
-    padding: "5px 0",
-    borderRadius: 4,
-    fontSize: 12,
-    cursor: "pointer",
-    transition: "opacity 120ms ease",
-  } as const;
+  }, [handleCopy, handleDismiss, isPresent]);
 
   return (
-    <div
+    <motion.div
       role="status"
+      initial={{ y: "100%", opacity: 0 }}
+      animate={{ y: 0, opacity: 1, transition: SPRING }}
+      exit={{ y: "100%", opacity: 0, transition: SPRING_EXIT }}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       style={{
@@ -94,42 +84,20 @@ export function ClipReceivePopup({
         bottom: 16,
         zIndex: 500,
         overflow: "hidden",
-        padding: "12px 14px 0",
+        padding: "12px 16px 0",
         borderRadius: 8,
         backgroundColor: "var(--surface)",
-        // color-mix is the accurate 40% accent; the rgba above it keeps older
-        // WebKit builds from falling back to no border at all.
-        border: "1px solid rgba(59, 130, 246, 0.4)",
-        borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-        boxShadow: "0 4px 16px rgba(0, 0, 0, 0.4)",
-        animation: `synapt-receive-${leaving ? "out" : "in"} ${
-          leaving ? EXIT_MS : 200
-        }ms ${leaving ? "ease-in" : "ease-out"} forwards`,
+        border: "1px solid var(--border)",
       }}
     >
       <div className="flex items-start justify-between gap-2">
-        <span
-          style={{
-            color: "var(--muted)",
-            fontSize: 11,
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
-          }}
-        >
-          From {sender_name}
-        </span>
+        <span className="section-heading mb-0">From {sender_name}</span>
         <button
           type="button"
           aria-label="Dismiss"
+          title="Dismiss (Esc)"
           onClick={handleDismiss}
-          style={{
-            color: "var(--muted)",
-            background: "transparent",
-            border: "none",
-            cursor: "pointer",
-            lineHeight: 0,
-            padding: 0,
-          }}
+          className="icon-button"
         >
           <X size={14} />
         </button>
@@ -138,7 +106,7 @@ export function ClipReceivePopup({
       <p
         className="line-clamp-2"
         style={{
-          marginTop: 6,
+          marginTop: 8,
           color: "var(--text)",
           fontSize: 13,
           whiteSpace: "pre-wrap",
@@ -149,47 +117,23 @@ export function ClipReceivePopup({
         {content}
       </p>
 
-      <div className="flex" style={{ gap: 8, marginTop: 10 }}>
-        <button
-          type="button"
-          onClick={handleCopy}
-          style={{
-            ...buttonBase,
-            backgroundColor: "var(--accent)",
-            color: "#ffffff",
-            border: "1px solid var(--accent)",
-          }}
-        >
+      <div className="flex" style={{ gap: 8, marginTop: 12 }}>
+        <button type="button" onClick={handleCopy} title="Copy (Enter)" className="btn btn-primary flex-1">
           Copy
         </button>
-        <button
-          type="button"
-          onClick={handleView}
-          style={{
-            ...buttonBase,
-            backgroundColor: "var(--surface)",
-            color: "var(--text)",
-            border: "1px solid var(--border)",
-          }}
-        >
+        <button type="button" onClick={handleView} className="btn btn-secondary flex-1">
           View
         </button>
-        <button
-          type="button"
-          onClick={handleDismiss}
-          style={{
-            ...buttonBase,
-            backgroundColor: "transparent",
-            color: "var(--muted)",
-            border: "none",
-          }}
-        >
+        <button type="button" onClick={handleDismiss} className="btn btn-ghost flex-1">
           Dismiss
         </button>
       </div>
 
-      <div style={{ height: 3, marginTop: 10, marginLeft: -14, marginRight: -14 }}>
+      <div style={{ height: 3, marginTop: 12, marginLeft: -16, marginRight: -16 }}>
         <div
+          // Exempt from the reduced-motion override: this countdown is what
+          // dismisses the popup, so collapsing it would dismiss it instantly.
+          data-motion-timer
           onAnimationEnd={(e) => {
             // Only the progress bar finishing means the popup timed out. A
             // paused animation never ends, which is what hovering relies on.
@@ -199,10 +143,10 @@ export function ClipReceivePopup({
             height: "100%",
             backgroundColor: "var(--accent)",
             animation: `synapt-receive-progress ${AUTO_DISMISS_MS}ms linear forwards`,
-            animationPlayState: paused || leaving ? "paused" : "running",
+            animationPlayState: paused || !isPresent ? "paused" : "running",
           }}
         />
       </div>
-    </div>
+    </motion.div>
   );
 }
