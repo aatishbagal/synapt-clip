@@ -1,6 +1,6 @@
 [package]
 name = "synapt-clip"
-version = "0.6.0"
+version = "0.6.1"
 edition = "2021"
 
 [dependencies]
@@ -9,11 +9,11 @@ tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
 synapt-core = { path = "../../synapt-core", version = "^0.2.3", features = ["updates"] }
 tauri-plugin-shell = "2"
 tauri-plugin-global-shortcut = "2"
-tauri-plugin-updater = "2"
+tauri-plugin-updater = "2.14.1"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.13", features = ["json"] }
 axum = "0.8"
-sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio", "migrate"] }
+sqlx = { version = "0.8.6", default-features = false, features = ["sqlite", "runtime-tokio", "migrate", "macros"] }
 arboard = "3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -45,3 +45,7 @@ tauri-build = { version = "2", features = [] }
 [lib]
 name = "synapt_clip_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+# Released SQLx drivers do not yet accept the SQLite security fix.
+[patch.crates-io]
+sqlx-sqlite = { path = "vendor/sqlx-sqlite" }
