@@ -163,15 +163,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn listener_port_is_bindable() {
-        // Confirms the listener port constant is correct and loopback-bindable.
-        let addr = SocketAddr::from(([127, 0, 0, 1], LISTENER_PORT));
+    async fn listener_is_loopback_bindable() {
+        assert_eq!(LISTENER_PORT, 57322);
+        // Use an assigned port so the test also works while SynaptClip is running.
+        let addr = SocketAddr::from(([127, 0, 0, 1], 0));
         let listener = tokio::net::TcpListener::bind(addr).await.expect("bind");
         let bound = listener.local_addr().expect("local addr");
-        assert_eq!(bound.port(), 57322);
+        assert_ne!(bound.port(), 0);
         assert!(bound.ip().is_loopback());
         // A client can establish a TCP connection to the bound port.
-        let connect = tokio::net::TcpStream::connect(addr).await;
+        let connect = tokio::net::TcpStream::connect(bound).await;
         assert!(connect.is_ok());
     }
 }
