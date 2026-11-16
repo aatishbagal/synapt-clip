@@ -496,3 +496,19 @@ impl Db {
         Ok(row.0)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn bundled_sqlite_contains_wal_memory_disclosure_fix() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        let version: String = sqlx::query_scalar("SELECT sqlite_version()")
+            .fetch_one(&pool).await.unwrap();
+        let parts: Vec<u32> = version.split('.')
+            .map(|part| part.parse().unwrap()).collect();
+        assert!(parts.as_slice() >= &[3, 54, 0], "unpatched SQLite {version}");
+    }
+
+}
